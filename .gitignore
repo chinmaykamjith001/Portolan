@@ -1,0 +1,39 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Local config (copy from portolan.toml.example)
+portolan.toml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# Local data
+.portolan/
+*.db
+*.db-wal
+*.db-shm
+
+# Eval outputs that are not reports
+eval/runs/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

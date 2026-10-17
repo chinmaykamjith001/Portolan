@@ -1,0 +1,51 @@
+.topbar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.input {
+  flex: 1;
+  max-width: 640px;
+  height: 32px;
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.empty {
+  max-width: 640px;
+  margin: 15vh auto 0;
+  padding: 0 var(--space-4);
+  color: var(--ink-2);
+}
+
+.empty ul {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0 0;
+}
+
+.empty li + li {
+  margin-top: var(--space-1);
+}
+
+.empty a {
+  color: var(--ink);
+}

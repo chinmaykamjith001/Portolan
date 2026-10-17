@@ -1,0 +1,28 @@
+[llm]
+provider = "gemini"                 # overridden by PORTOLAN_LLM_PROVIDER
+
+[llm.models]                        # fill from `portolan doctor` — IDs below are placeholders
+fast = "gemini/<flash-lite-model-id>"
+default = "gemini/<flash-model-id>"
+strong = "gemini/<flash-model-id>"  # set to a Pro model only with a paid key
+
+[llm.limits]                        # free-tier defaults; check your project's limits in AI Studio
+rpm = 8                             # stay under the reported ~10 RPM
+rpd = 1400                          # stay under the reported ~1,500 RPD
+tpm = 200000                        # set from your project's real limit
+p0_reserve_rpm = 2
+p0_reserve_rpd_fraction = 0.1
+
+[generation]
+skeleton_batch_size = 6
+max_depth = 8
+explanation_words = [200, 400]
+mismatch_confidence_threshold = 0.7
+
+[sandbox]
+mode = "process"                    # process | docker
+timeout_seconds = 5
+memory_mb = 256
+
+[storage]
+home = "~/.portolan"
