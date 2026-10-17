@@ -106,6 +106,16 @@ class Gateway:
             except (ValidationError, json.JSONDecodeError):
                 parsed = None  # stale entry from an older schema: fall through and regenerate
             else:
+                if self.recorder is not None:  # a record run also captures cached answers
+                    self.recorder.write(
+                        CallContext(
+                            template_id=template.id,
+                            template_version=template.version,
+                            inputs_hash=in_hash,
+                            role=role,
+                        ),
+                        ProviderResponse(text=cached.text, usage=cached.usage, model=cached.model),
+                    )
                 return LLMResult(
                     parsed=parsed,
                     raw_text=cached.text,

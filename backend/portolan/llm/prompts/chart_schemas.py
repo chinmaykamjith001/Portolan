@@ -40,13 +40,13 @@ class LinkOut(BaseModel):
 
 class MasterLayerOut(BaseModel):
     center: CenterOut
-    concepts: list[ConceptOut]  # 10–20
+    concepts: list[ConceptOut]  # 10-20
     links: list[LinkOut]
 
 
 class SkeletonLayerOut(BaseModel):
     center_key: str  # the key of the concept being decomposed, exactly as given in the input
-    concepts: list[ConceptOut]  # 4–10 sub-concepts
+    concepts: list[ConceptOut]  # 4-10 sub-concepts
     links: list[LinkOut]  # among the sub-concepts and from "center"
 
 

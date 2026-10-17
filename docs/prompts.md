@@ -7,9 +7,9 @@ fixtures. Rendered prompts are snapshot-tested.
 
 | Template | Version | Role | Milestone | Status |
 |---|---|---|---|---|
-| `master_layer` | – | strong | M4 | not written |
-| `skeleton_batch` | – | fast | M4 | not written |
-| `canonical_same_concept` | – | fast | M4 | not written |
+| `master_layer` | 1 | strong | M4 | written |
+| `skeleton_batch` | 1 | fast | M4 | written |
+| `canonical_same_concept` | 1 | fast | M4 | written |
 | `route_section` | – | fast | M7 | not written |
 | `sub_route` | – | fast | M7 | not written |
 | `explain` | – | default | M5/M6 | not written |

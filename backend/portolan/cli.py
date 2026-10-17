@@ -419,5 +419,83 @@ async def _index(
             typer.echo(f"  {hit.score:7.3f}  {s.path}:{s.start_line}-{s.end_line}  {s.qualname}")
 
 
+RECORD_STEPS = ("master", "skeleton")
+
+
+@app.command()
+def record(
+    paper: str = typer.Option(..., "--paper", help="arXiv link or id, DOI or title."),
+    steps: str = typer.Option(
+        "master,skeleton", help=f"Comma-separated: {', '.join(RECORD_STEPS)}."
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Don't ask before spending requests."),
+) -> None:
+    """Run steps against the REAL provider and save the responses as mock fixtures.
+
+    Uses your Gemini key from .env. Responses go to backend/tests/fixtures/llm/ so tests and
+    development can replay them with PORTOLAN_LLM_PROVIDER=mock at no cost.
+    """
+    wanted = [s.strip() for s in steps.split(",") if s.strip()]
+    unknown = [s for s in wanted if s not in RECORD_STEPS]
+    if unknown:
+        typer.echo(f"Unknown step(s): {', '.join(unknown)}. Choose from {', '.join(RECORD_STEPS)}.")
+        raise typer.Exit(code=1)
+    config = load_config()
+    config.llm.provider = "gemini"
+    if not api_key_present("gemini"):
+        typer.echo("GEMINI_API_KEY isn't set in .env. Add it there (never paste it into chat).")
+        raise typer.Exit(code=1)
+    if config.llm.models.placeholders():
+        typer.echo("portolan.toml still has placeholder model ids. Run `portolan doctor` first.")
+        raise typer.Exit(code=1)
+    # §5.3: master 1-2, level-1 skeletons ~4, level-2 ~15, plus a few same-concept checks.
+    estimate = (2 if "master" in wanted else 0) + (25 if "skeleton" in wanted else 0)
+    typer.echo(f"This will use up to ~{estimate} real Gemini requests (cached answers are free).")
+    if estimate > 30 and not yes and not typer.confirm("Continue?", default=False):
+        raise typer.Exit(code=1)
+    db = open_database(config.storage.db_path)
+    try:
+        asyncio.run(_record(paper, config, db, wanted))
+    finally:
+        db.close()
+
+
+async def _record(raw: str, config: Config, db: Database, steps: list[str]) -> None:
+    from portolan.chart.master import ChartBuilder
+    from portolan.llm.gateway import Gateway
+    from portolan.llm.providers.base import FixtureStore
+    from portolan.llm.providers.mock import DEFAULT_FIXTURES
+    from portolan.models.concept import MASTER
+    from portolan.store.chart import ChartStore
+
+    async with PoliteClient(db, contact=config.http.contact) as client:
+        doc = (await _resolve_and_ingest(raw, client, db)).doc
+
+    def on_event(kind: str, data: dict[str, object]) -> None:
+        if kind == "rate_limited":
+            typer.echo(f"  waiting for the free-tier rate limit (~{data['wait_seconds']} s)…")
+
+    gateway = Gateway(config, db, recorder=FixtureStore(DEFAULT_FIXTURES), on_event=on_event)
+    store = ChartStore(db)
+    store.delete_paper(doc.paper_id)  # rebuild so every call is captured (cache answers are free)
+    builder = ChartBuilder(doc, gateway, store)
+    before = gateway.limiter.budget.today()
+    if "master" in steps:
+        typer.echo("Building the master layer…")
+        layer = await builder.master()
+        names = [c.title for c in store.concepts(doc.paper_id, layer.concepts).values()]
+        typer.echo(f"  {len(names)} concepts, {len(layer.links)} links: " + "; ".join(names))
+    if "skeleton" in steps:
+        typer.echo("Building skeletons two levels below the master layer…")
+        made = await builder.ensure_frontier(MASTER, levels=2)
+        typer.echo(f"  {len(made)} child layers")
+    after = gateway.limiter.budget.today()
+    used = sum(int(r["requests"]) for r in after) - sum(int(r["requests"]) for r in before)
+    typer.echo(f"\nReal requests this run: {used} (calls answered from cache: free).")
+    for w in builder.build.warnings:
+        typer.echo(f"  warning: {w}")
+    typer.echo(f"Fixtures written under {DEFAULT_FIXTURES}")
+
+
 if __name__ == "__main__":
     app()
