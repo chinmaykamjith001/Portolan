@@ -36,7 +36,7 @@ export interface UIState {
 }
 
 export const currentLayerId = (s: Pick<UIState, "path">): string =>
-  s.path.length ? s.path[s.path.length - 1]! : MASTER;
+  s.path[s.path.length - 1] ?? MASTER;
 
 export const useUI = create<UIState>((set, get) => ({
   paperId: null,
@@ -63,8 +63,8 @@ export const useUI = create<UIState>((set, get) => ({
     })),
   back: () =>
     set((s) => {
-      if (!s.path.length) return s;
-      const from = s.path[s.path.length - 1]!;
+      const from = s.path[s.path.length - 1];
+      if (from === undefined) return s;
       return { path: s.path.slice(0, -1), selectedId: from, cameFrom: from, edge: null };
     }),
   jumpTo: (depth) =>
