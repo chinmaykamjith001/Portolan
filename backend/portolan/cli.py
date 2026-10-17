@@ -347,5 +347,77 @@ def _print_doc(doc: PaperDoc, attempts: list[str]) -> None:
         typer.echo("Code links in the paper: " + ", ".join(code_links[:5]))
 
 
+@app.command()
+def index(
+    paper: str = typer.Argument(..., help="arXiv link or id, DOI or title."),
+    query: list[str] | None = typer.Option(None, "--query", "-q", help="Try retrieval with this."),
+    embed: bool = typer.Option(False, help="Also compute embeddings (needs the embeddings extra)."),
+    choose: int | None = typer.Option(None, help="For a title search: pick match N (1-3)."),
+) -> None:
+    """Clone (or reuse) the paper's chosen code and index it for retrieval."""
+    config = load_config()
+    db = open_database(config.storage.db_path)
+    try:
+        asyncio.run(_index(paper, config, db, query or [], embed, choose))
+    finally:
+        db.close()
+
+
+async def _index(
+    raw: str, config: Config, db: Database, queries: list[str], embed: bool, choose: int | None
+) -> None:
+    import time
+
+    from portolan.code.embeddings import default_embedder, embed_symbols
+    from portolan.code.index_store import IndexStore
+    from portolan.code.indexer import index_checkout
+    from portolan.code.retrieval import retrieve
+    from portolan.repo.cloner import CloneError, clone
+    from portolan.store.repos import chosen_repo
+
+    async with PoliteClient(db, contact=config.http.contact) as client:
+        doc = (await _resolve_and_ingest(raw, client, db, choose=choose)).doc
+    repo = chosen_repo(db, doc.paper_id)
+    if repo is None:
+        typer.echo(f"No code chosen for {doc.title} yet. Run `portolan repos {raw}` first.")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Cloning {repo.owner}/{repo.name}…")
+    try:
+        checkout = await asyncio.to_thread(clone, repo, config.storage.workspace_dir, doc.paper_id)
+    except CloneError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from None
+
+    store = IndexStore(db)
+    start = time.perf_counter()
+    built = index_checkout(store, checkout.root, repo.id, checkout.commit_sha)
+    took = time.perf_counter() - start
+    idx = built.index
+    typer.echo(
+        f"Indexed {len(idx.files)} files ({dict(built.kinds)}) · {idx.symbol_count} symbols · "
+        f"{took:.1f}s at {checkout.commit_sha[:12]}"
+    )
+    typer.echo("Libraries: " + (", ".join(idx.library_modules) or "none"))
+    skipped = len(idx.skipped) + len(checkout.skipped_large)
+    if skipped:
+        typer.echo(f"Skipped {skipped} file(s)/folder(s): vendored, binary, or over 1 MB.")
+
+    embedder = None
+    if embed:
+        embedder = default_embedder()
+        if embedder is None:
+            typer.echo("Embeddings extra not installed: `uv sync --extra embeddings`. BM25 only.")
+        else:
+            n = embed_symbols(store, repo.id, checkout.commit_sha, embedder)
+            typer.echo(f"Embedded {n} symbols with {embedder.model}.")
+
+    for q in queries:
+        typer.echo(f"\nTop matches for “{q}”:")
+        for hit in retrieve(store, repo.id, checkout.commit_sha, q, k=5, embedder=embedder):
+            s = hit.symbol
+            typer.echo(f"  {hit.score:7.3f}  {s.path}:{s.start_line}-{s.end_line}  {s.qualname}")
+
+
 if __name__ == "__main__":
     app()

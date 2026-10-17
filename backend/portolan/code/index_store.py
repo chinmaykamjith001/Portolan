@@ -79,7 +79,13 @@ def symbol_from_row(row: sqlite3.Row) -> Symbol:
 
 
 def symbol_body(lines: list[str], symbol: Symbol) -> str:
-    """A symbol's source lines, capped at BODY_CHARS."""
+    """A symbol's source lines, capped at BODY_CHARS.
+
+    Module symbols span the whole file; indexing all of it would let any file outrank the
+    function that actually implements a concept, so a module contributes only its docstring.
+    """
+    if symbol.kind == "module":
+        return ""
     start = max(symbol.start_line, 1) - 1
     end = max(symbol.end_line, symbol.start_line)
     return "\n".join(lines[start:end])[:BODY_CHARS]

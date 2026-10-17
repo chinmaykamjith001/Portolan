@@ -103,3 +103,26 @@
 
 **Next: M3 — Code index** (clone, tree-sitter index, config indexing, FTS5 + local embeddings,
 hybrid retrieval, library-call detection).
+
+## M3 — Code index ✅ (2026-10-17)
+
+**Plan**: shared models (`models/code.py`), then four parallel pieces — cloner, Python indexer,
+config indexer, FTS5 store + hybrid retrieval — integrated by `code/indexer.py` and `portolan index`.
+
+**Done / verified**
+- `ruff`, `pyright` (strict), `pytest`: 241 tests pass. Acceptance: on the fixture repo, all 7 known
+  concepts (scaled dot-product attention, multi-head attention, positional encoding, label smoothing,
+  warmup, residual + layer norm, feed-forward) are in the top 3, BM25-only and hybrid. A synthetic
+  200-file repo indexes in well under the 60 s budget.
+- Cloner tests: shallow, SHA recorded, >1 MB file never checked out, planted hook never runs, no
+  submodule contents, reuse, clear errors, content hash for uploads.
+- Real run: `portolan repos 2106.09685` → microsoft/LoRA; `portolan index 2106.09685` cloned and
+  indexed 854 files / 23,412 symbols in 22.7 s and answered queries (e.g. "lora alpha scaling" →
+  the `--lora_alpha` arguments and `loralib/layers.py`).
+
+**Not done / known gaps**
+- Real sentence-transformers embeddings not run (optional extra not installed); hashed embeddings in tests.
+- Retrieval vocabulary gap on real repos (see DECISIONS); LLM rerank arrives with M6 grounding.
+- Test suite takes ~70 s (per-test HTTPS client setup); worth trimming.
+
+**Next: M4 — Chart generation** (first real LLM use).

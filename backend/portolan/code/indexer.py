@@ -7,6 +7,7 @@ imports are libraries (they don't resolve inside the repo), and stores everythin
 
 from __future__ import annotations
 
+import os
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
@@ -47,10 +48,19 @@ def _kind(path: Path) -> str | None:
     return None
 
 
+def long_path(path: Path) -> Path:
+    r"""On Windows, use an extended-length path (\\?\C:\...) so paths over 260 chars work."""
+    if os.name != "nt":
+        return path
+    resolved = str(path.resolve())
+    return path if resolved.startswith("\\\\?\\") else Path("\\\\?\\" + resolved)
+
+
 def walk(root: Path) -> tuple[list[tuple[str, Path, str]], dict[str, str]]:
     """(relative path, absolute path, kind) for every indexable file, plus skipped → reason."""
     found: list[tuple[str, Path, str]] = []
     skipped: dict[str, str] = {}
+    root = long_path(root)
     stack = [root]
     while stack:
         current = stack.pop()
@@ -71,7 +81,12 @@ def walk(root: Path) -> tuple[list[tuple[str, Path, str]], dict[str, str]]:
             kind = _kind(entry)
             if kind is None:
                 continue
-            if entry.stat().st_size > MAX_FILE_BYTES:
+            try:
+                size = entry.stat().st_size
+            except OSError:
+                skipped[rel] = "couldn't read the file"
+                continue
+            if size > MAX_FILE_BYTES:
                 skipped[rel] = "larger than 1 MB"
                 continue
             if len(found) >= MAX_FILES:
@@ -148,7 +163,11 @@ def build_index(root: Path, repo_id: str, commit_sha: str) -> BuiltIndex:
     texts: dict[str, str] = {}
     kinds: Counter[str] = Counter()
     for rel, path, kind in entries:
-        raw = path.read_bytes()
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            skipped[rel] = "couldn't read the file"
+            continue
         if b"\x00" in raw[:8192]:
             skipped[rel] = "binary file"
             continue

@@ -5,7 +5,7 @@ into a map of concepts you can jump into down to first principles, walks you thr
 the order it was written, and shows where every concept lives in the code — and where the code
 disagrees with the paper.
 
-> Status: early development (Milestones 0–2 done: foundations, paper ingestion, repo finder). See [docs/PROGRESS.md](docs/PROGRESS.md).
+> Status: early development (Milestones 0–3 done: foundations, paper ingestion, repo finder, code index). See [docs/PROGRESS.md](docs/PROGRESS.md).
 > The full specification is [PORTOLAN_SPEC.md](PORTOLAN_SPEC.md); the architecture diagram is
 > [docs/architecture.drawio](docs/architecture.drawio) (open in diagrams.net).
 

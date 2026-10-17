@@ -122,6 +122,43 @@ Choices the spec left open, deviations, and things verified against real docs. N
 - **HTML link text:** external links whose visible text isn't the URL now keep it in the paragraph
   text ("our code (https://github.com/…)"), so the finder can read the words around them.
 
+## M3 — Code index (2026-10-17)
+
+Verified facts behind these choices: [docs/notes/m3-externals.md](notes/m3-externals.md).
+
+- **Parsers: `tree-sitter` 0.26 + standalone grammar wheels** (`tree-sitter-python`, `-yaml`, `-json`,
+  `-toml`) instead of `tree-sitter-language-pack`. Pack 1.x downloads a 22 MB parser archive at first
+  use (breaks offline installs; fails with `DownloadError`); 0.x is 170 MB unpacked and its grammar
+  shape differs. The grammar wheels are 0.1 MB each, MIT, fully offline, and pinned. Only Python is
+  required in v1; adding languages later means adding their grammar wheels.
+- **tree-sitter on Windows:** `Point.row` on 0.26.0 was seen to corrupt memory in this environment,
+  so the indexer reads points by index (`point[0]`). Docstrings are read in Python, not in queries
+  (grammar-shape differences).
+- **Embeddings are an optional extra** (`uv sync --extra embeddings` → sentence-transformers +
+  bge-small-en-v1.5, ~750 MB with CPU torch, ~29 s import). Without it, retrieval is BM25-only;
+  `HashEmbedder` (hashed bag of words) is used in tests. The import is lazy. Not yet run with real
+  weights. The fastembed/ONNX route (126 MB) is noted as an alternative; vectors from different routes
+  must not be mixed in one index.
+- **Retrieval:** FTS5 with `unicode61 tokenchars '_'`, an extra `name_parts` column with snake/Camel
+  splits, column weights name 5 / name_parts 4 / docstring 2 / body 1 / path 0.5, user text sanitised
+  into quoted tokens; hybrid = reciprocal-rank fusion (k=60) of BM25 and cosine. Module symbols index
+  only their docstring (otherwise whole files outrank the function that implements a concept). The LLM
+  rerank (§10.4 step 4) is a hook, wired in M6.
+- **Cloning:** `--depth 1 --single-branch --no-tags --no-recurse-submodules --filter=blob:limit=1m
+  --no-checkout`, empty `--template=` and `core.hooksPath`, `protocol.file/ext.allow=never`, then a
+  sparse checkout that excludes the omitted >1 MB blobs (a plain checkout would lazily fetch them).
+  Uploads and local folders get a `content:` hash instead of a SHA.
+- **Walk guards:** skips vendored/generated folders (`third_party`, `vendor`, `node_modules`, `build`,
+  `.venv`, …), symlinks, binaries, files over 1 MB, lockfiles, and caps at 5,000 files. Windows paths
+  use the `\\?\` extended-length prefix (the LoRA repo has paths over 260 characters).
+- **Library detection:** an import is a library when its top-level module isn't a file/folder name in
+  the repo and isn't stdlib; calls are qualified through import aliases (`F.softmax` →
+  `torch.nn.functional.softmax`).
+- **Real run (microsoft/LoRA @ c4593f0):** 854 files (815 Python, 7 notebooks, 32 configs), 23,412
+  symbols, 22.7 s including storage. Known gap: paper words vs code names ("low-rank adaptation" vs
+  `LoRALayer`) defeat BM25 alone; embeddings + the M6 LLM rerank are meant to close it. Bulky example
+  folders (a vendored copy of transformers under `examples/`) also add noise; consider a path prior in M6.
+
 ## Gemini setup (2026-10-17)
 
 - Owner's free key is in their local `.env`; `PORTOLAN_LLM_PROVIDER` stays `mock` there, and real calls
