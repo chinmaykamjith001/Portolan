@@ -79,8 +79,14 @@ class StorageConfig(BaseModel):
         return self.home_dir / "workspace"
 
 
+class HttpConfig(BaseModel):
+    # Sent in the User-Agent so arXiv / Semantic Scholar can reach whoever runs this instance.
+    contact: str = ""
+
+
 class Config(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    http: HttpConfig = Field(default_factory=HttpConfig)
     generation: GenerationConfig = Field(default_factory=GenerationConfig)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)

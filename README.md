@@ -5,7 +5,7 @@ into a map of concepts you can jump into down to first principles, walks you thr
 the order it was written, and shows where every concept lives in the code — and where the code
 disagrees with the paper.
 
-> Status: early development (Milestone 0 — foundations). See [docs/PROGRESS.md](docs/PROGRESS.md).
+> Status: early development (Milestones 0–1 done: foundations, paper ingestion). See [docs/PROGRESS.md](docs/PROGRESS.md).
 > The full specification is [PORTOLAN_SPEC.md](PORTOLAN_SPEC.md); the architecture diagram is
 > [docs/architecture.drawio](docs/architecture.drawio) (open in diagrams.net).
 
@@ -16,6 +16,7 @@ Needs Python 3.12 with [uv](https://docs.astral.sh/uv/), and Node 20+ with pnpm.
 1. `make setup` (or `cd backend && uv sync`, then `cd frontend && pnpm install`)
 2. Copy `.env.example` to `.env`. The default `PORTOLAN_LLM_PROVIDER=mock` needs no key.
 3. `make test`, then `cd backend && uv run portolan doctor` to check your setup.
+4. Try ingestion (no key needed): `uv run portolan ingest https://arxiv.org/abs/1706.03762 --dry-run`
 
 ### Adding a Gemini key (needed from Milestone 4)
 

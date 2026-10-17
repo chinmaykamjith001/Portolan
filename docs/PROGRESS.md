@@ -27,3 +27,45 @@
 
 **Next: M1 — Paper ingestion** (resolver, polite cached fetchers, HTML/LaTeX/PDF parsers → `PaperDoc`,
 `portolan ingest --dry-run`).
+
+## M1 — Paper ingestion ✅ (2026-10-17)
+
+**Plan**
+- `models/paper.py`: `PaperRef`, `Anchor`, `PaperDoc` (§9.1).
+- `ingest/anchors.py`: one `DocBuilder` shared by all parsers — assigns stable ids
+  (`sec:3.2.1`, `para:3.2.1:2`, `eq:1`, `tab:3`, `fig:2`, `alg:1`), labels, document order,
+  parents, resolves cross-references into `equation_refs`, extracts the notation table.
+- `ingest/http.py`: polite client — per-host spacing (arXiv ≥ 3 s), descriptive User-Agent,
+  SQLite response cache, retry on 429/5xx.
+- `ingest/resolver.py`: arXiv URLs/IDs (abs/pdf/html, ar5iv, alphaxiv, HF papers, old-style IDs),
+  DOIs (arXiv DOIs directly; others via Semantic Scholar), titles via the arXiv API (top 3, user confirms).
+- Parsers: `parse_html.py` (LaTeXML: arxiv.org/html and ar5iv), `parse_latex.py` (flatten
+  `\input`/`\include`, strip comments, expand simple macros, sections/equations/labels/refs),
+  `parse_pdf.py` (PyMuPDF, font-size heuristics, `low_structure`).
+- `ingest/pipeline.py`: metadata from the arXiv API, then HTML → LaTeX → PDF; store `PaperDoc` in SQLite.
+- CLI: `portolan ingest <input|file.pdf> [--dry-run]` prints the section tree and anchor counts.
+- Tests: synthetic HTML/LaTeX fixtures, generated PDF, resolver with mocked HTTP, http client
+  politeness/caching; `-m network` test on both development papers.
+
+**Done / verified**
+- `ruff`, `pyright` (strict), `pytest`: 98 tests pass (66 new). Synthetic HTML and LaTeX fixtures
+  cover nested sections, `\paragraph` headings, numbered/unnumbered/grouped equations, align rows
+  with `\nonumber`, `\input` flattening (cycle-safe), comment stripping, `\iffalse`/comment blocks,
+  macro expansion (args, `\def`, `\DeclareMathOperator`, protected names), `\ref`/`\eqref`/`\cref`
+  rendering, floats, appendices, bibliography, notation extraction. A PDF generated at test time
+  covers the PDF fallback. Mocked HTTP covers the resolver (arXiv URL forms, DOIs via Semantic Scholar,
+  titles), politeness spacing, caching/TTL, 429/5xx retry, tarball safety, and every pipeline fallback.
+- **Network test (`pytest -m network`) passes** for both development papers from real arXiv
+  (1706.03762v7 and 2106.09685v2, both via arxiv.org/html).
+- Ran the LaTeX parser by hand on both papers' real e-print sources: same section tree and
+  equation numbering as the HTML path.
+- `portolan ingest https://arxiv.org/abs/1706.03762 --dry-run` prints the full section tree
+  (28 sections, 61 paragraphs, 5 equations, 4 tables, 5 figures) and finds the tensor2tensor link.
+
+**Not done / known gaps**
+- No `POST /api/papers` endpoint yet: ingestion is CLI-only until the orchestrator and SSE exist (M4/M5).
+- `equation_refs` is empty for both development papers: neither paper cross-references its
+  equations with `\ref`, so this is correct, but it is only exercised by the fixtures.
+- The PDF heuristics are only tested on a generated PDF, not a real paper PDF.
+
+**Next: M2 — Repo finder** (paper links, HF Papers API, GitHub search; validation; RepoStatus; uploads).

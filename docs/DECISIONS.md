@@ -49,6 +49,45 @@ Choices the spec left open, deviations, and things verified against real docs. N
 - **Windows sandbox note for M6:** `resource` limits are unavailable on Windows; per §10.7.3 we'll use
   timeout-only there and log a warning (or a job object if it proves simple).
 
+## M1 — Paper ingestion (2026-10-17)
+
+- **HTML parsing: BeautifulSoup + lxml** (the spec allows selectolax or BS4+lxml); BS4's tree API
+  makes the nested LaTeXML walk simpler. **LaTeXML structure verified** on real pages
+  (arxiv.org/html/2106.09685 and ar5iv.labs.arxiv.org/html/2106.09685, same markup):
+  `section.ltx_section|ltx_subsection|ltx_subsubsection|ltx_paragraph|ltx_appendix`, number in
+  `.ltx_title > span.ltx_tag`; paragraphs `div.ltx_para`; equations `table.ltx_equation`, or
+  `table.ltx_equationgroup` with one `tbody[id=S2.E1]` per numbered row; LaTeX in `math[alttext]`;
+  floats `figure.ltx_table|ltx_figure` with `figcaption > span.ltx_tag` ("Table 1: ");
+  cross-refs `a.ltx_ref[href="#S4.E3"]`; bibliography `section.ltx_bibliography li.ltx_bibitem`.
+- **arXiv API Atom verified** on a real `id_list=2106.09685` response: entry `<id>` is
+  `http://arxiv.org/abs/<id><version>`; authors in `author/name`; abstract in `summary`. Parsed with
+  lxml with entity resolution and network access disabled.
+- **Fields added to §9.1 models:** `Anchor.level` (section depth, for the tree and the Route),
+  `Anchor.is_appendix` (Route side roads, §10.6), `PaperDoc.references` (bibliography; the §8
+  contract lists references but §9.1 had no field), `PaperDoc.low_structure` (§10.2 PDF flag).
+- **Anchor id details** beyond the spec's examples: unnumbered sections → `sec:<parent>.<slug>`;
+  unnumbered equations → `eq:<section>:u<n>`; unnumbered floats → `tab:<section>:u<n>`; content
+  before the first heading → `para:front:<n>`; collisions get a `~2` suffix. In align-style
+  environments each numbered row is its own equation anchor; unnumbered rows join the next numbered row.
+- **Same ids from HTML and LaTeX:** on both development papers the LaTeX parser gives the same
+  section ids and equation numbers as the HTML parser (checked by hand on the real sources).
+- **LaTeX limits:** `\numberwithin{equation}{section}` and `\tag` are handled; other counter
+  changes, `\def` with parameters, and `\newcommand` with optional-argument defaults are not
+  expanded. `\iffalse...\fi` removal is non-nesting.
+- **e-print extraction is in memory only:** regular files with safe relative names, `.tex/.bbl/.ltx`
+  only, ≤ 20 MB each, ≤ 100 MB total, ≤ 5000 members. Nothing from a source bundle is written to disk.
+- **Politeness:** 3 s between requests to each arXiv host (export.arxiv.org, arxiv.org, ar5iv),
+  1.1 s for Semantic Scholar, 1 s elsewhere. User-Agent `Portolan/<version> (research paper
+  explorer; self-hosted[; contact])`; the contact comes from the new `[http] contact` option.
+  Responses with status 200 are cached forever when the URL is versioned (with a TTL for searches and
+  unversioned metadata); 404s are cached for a day.
+- **Title input never auto-resolves:** the CLI lists up to 3 arXiv matches and asks.
+- **PyMuPDF is AGPL-3.0.** It's a runtime dependency (not vendored), which is fine for local use, but
+  matters for the MIT license story and for any hosted mode. **Owner to decide** before release:
+  keep it, or swap the PDF fallback to a permissive library (e.g. pypdfium2).
+- **Note for the orchestrator (M4):** politeness spacing is per `PoliteClient` instance, so the
+  server must share one client per process.
+
 ## Measured request budgets
 
 _None yet — filled in from real `portolan record` runs (M4)._

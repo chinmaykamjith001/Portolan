@@ -24,5 +24,8 @@ mode = "process"                    # process | docker
 timeout_seconds = 5
 memory_mb = 256
 
+[http]
+contact = ""                        # e.g. a project URL or email; sent in the User-Agent to arXiv etc.
+
 [storage]
 home = "~/.portolan"

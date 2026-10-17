@@ -29,4 +29,27 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        2,
+        "papers and external http cache",
+        """
+        CREATE TABLE papers (
+            paper_id TEXT PRIMARY KEY,
+            ref_json TEXT NOT NULL,
+            doc_json TEXT NOT NULL,
+            source_kind TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        -- Responses from arXiv, Semantic Scholar, etc. (spec §15: cache all external responses).
+        CREATE TABLE http_cache (
+            key TEXT PRIMARY KEY,
+            url TEXT NOT NULL,
+            status INTEGER NOT NULL,
+            content_type TEXT,
+            body BLOB NOT NULL,
+            fetched_at REAL NOT NULL
+        );
+        """,
+    ),
 ]

@@ -1,0 +1,50 @@
+% Synthetic fixture written for tests.
+\documentclass{article}
+\usepackage{amsmath}
+\newcommand{\model}{ToyNet}
+\newcommand{\vect}[1]{\mathbf{#1}}
+\newcommand\R{\mathbb{R}}
+\def\eps{\epsilon}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\renewcommand{\section}{\oops} % must NOT be honored
+\title{The \model{} Paper}
+\author{Ada Example\thanks{Equal contribution.} \and Bo Sample \\ Some University}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We introduce \model. Code: \url{https://github.com/example/toynet}.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+\model{} reads tokens in parallel. % a comment with \section{Fake}
+Escaped percent: 50\% of tokens.
+
+A second paragraph, where $\vect{x}$ is the input vector and $d$ is the model width.
+
+\iffalse
+\section{Hidden section}
+\fi
+\begin{comment}
+\section{Also hidden}
+\end{comment}
+
+\input{sections/method}
+
+\section*{Acknowledgments}
+Thanks.
+
+\appendix
+\section{Proofs}
+\label{app:proofs}
+See Eq.~\eqref{eq:score}.
+\subsection{A lemma}
+Lemma text.
+
+\begin{thebibliography}{9}
+\bibitem{a} A. Person. A cited work.
+\bibitem[B]{b} B. Person. Another work.
+\end{thebibliography}
+\end{document}

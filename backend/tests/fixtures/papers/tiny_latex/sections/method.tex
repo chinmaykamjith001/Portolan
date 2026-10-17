@@ -1,0 +1,35 @@
+\section{Method}
+\label{sec:method}
+\subsection{Scores}
+We compute scores
+\begin{equation}
+  S = \frac{Q K^\top}{\sqrt{d_k}} \label{eq:score}
+\end{equation}
+and normalize them with a softmax, as in Eq.~\eqref{eq:score} and \cref{eq:max,eq:exp}.
+
+\begin{align}
+  m &= \max_j S_{ij} \label{eq:max} \\
+  t &= S_{ij} - m \nonumber \\
+  p_{ij} &= e^{t} \label{eq:exp}
+\end{align}
+
+\begin{equation*}
+  \sum_j p_{ij} = 1
+\end{equation*}
+\subsubsection{Stability}
+We pick $\hat{y} = \argmax_y p(y)$ and $\eps = 0.1$ in $\R^{d}$.
+\[ z = \vect{x} + 1 \]
+
+\begin{table}[t]
+  \centering
+  \caption{Hyperparameters of \model.}
+  \label{tab:hp}
+  \begin{tabular}{ll} heads & 8 \\ \end{tabular}
+\end{table}
+
+\begin{figure}
+  \caption[short]{The \model{} architecture.}\label{fig:arch}
+\end{figure}
+
+See \cref{tab:hp} and Figure~\ref{fig:arch}; the proof is in \cref{app:proofs}.
+\input{sections/method} % self-include must not loop
