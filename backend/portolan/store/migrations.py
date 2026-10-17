@@ -156,4 +156,53 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        5,
+        "concept graph and job queue",
+        """
+        CREATE TABLE concepts (
+            paper_id TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            canonical_name TEXT NOT NULL,
+            depth INTEGER NOT NULL,
+            concept_json TEXT NOT NULL,
+            PRIMARY KEY (paper_id, concept_id)
+        );
+        CREATE INDEX concepts_canonical ON concepts (paper_id, canonical_name);
+
+        CREATE TABLE layers (
+            paper_id TEXT NOT NULL,
+            layer_id TEXT NOT NULL,
+            center TEXT NOT NULL,
+            gen_state TEXT NOT NULL,
+            layer_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (paper_id, layer_id)
+        );
+
+        -- Which layers a concept appears in (the concept graph is a DAG).
+        CREATE TABLE layer_members (
+            paper_id TEXT NOT NULL,
+            layer_id TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            PRIMARY KEY (paper_id, layer_id, concept_id)
+        );
+        CREATE INDEX layer_members_concept ON layer_members (paper_id, concept_id);
+
+        -- Persistent priority job queue (spec §8): survives restarts; P0 > P1 > P2.
+        CREATE TABLE jobs (
+            job_key TEXT PRIMARY KEY,
+            paper_id TEXT,
+            kind TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            state TEXT NOT NULL,      -- queued | running | done | failed | paused
+            payload_json TEXT NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX jobs_state ON jobs (state, priority, created_at);
+        """,
+    ),
 ]
