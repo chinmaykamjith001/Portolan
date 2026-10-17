@@ -88,6 +88,14 @@ def text_of(el: Tag | NavigableString, *, skip_blocks: bool = True) -> str:
         return f" (footnote: {inner.strip()})" if inner.strip() else ""
     if el.name in {"script", "style", "button"}:
         return ""
+    if el.name == "a":
+        # Keep external link targets in the text ("our code (https://github.com/...)") so the
+        # repo finder can see the words around a link even when the visible text isn't the URL.
+        visible = "".join(text_of(c, skip_blocks=skip_blocks) for c in el.children)  # pyright: ignore[reportArgumentType]
+        href = _attr(el, "href")
+        if href.startswith(("http://", "https://")) and href.rstrip("/") not in visible:
+            return f"{visible} ({href})"
+        return visible
     parts = [text_of(child, skip_blocks=skip_blocks) for child in el.children]  # pyright: ignore[reportArgumentType]
     sep = " " if el.name in {"p", "li", "div", "td", "tr", "br"} else ""
     return sep.join(parts) if sep else "".join(parts)

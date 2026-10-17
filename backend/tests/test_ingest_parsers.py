@@ -133,7 +133,7 @@ def test_html_paragraph_text_floats_links_refs(html_doc: PaperDoc) -> None:
     p = html_doc.anchor("para:1:1")
     assert p is not None
     assert "$d_{k}$ is the dimension of the keys." in p.text
-    assert "(footnote: See the project page.)" in p.text
+    assert "(footnote: See the project page (https://example.org/project).)" in p.text
     assert html_doc.anchor("para:1:2").text == (  # type: ignore[union-attr]
         "The main result is Equation 1; details are in Appendix A."
     )

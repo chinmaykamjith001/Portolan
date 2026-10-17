@@ -25,6 +25,7 @@ def _no_politeness_delay(monkeypatch: pytest.MonkeyPatch) -> None:
         original(self, *args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(PoliteClient, "__init__", fast_init)
+    monkeypatch.setattr("portolan.ingest.http.DEFAULT_SPACING", 0.0)
 
 
 @respx.mock(assert_all_called=False)

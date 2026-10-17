@@ -52,4 +52,22 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        3,
+        "repo candidates and chosen repo",
+        """
+        CREATE TABLE repo_candidates (
+            paper_id TEXT PRIMARY KEY,
+            candidates_json TEXT NOT NULL,
+            status_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE paper_repo (
+            paper_id TEXT PRIMARY KEY,
+            candidate_json TEXT NOT NULL,
+            chosen_at TEXT NOT NULL
+        );
+        """,
+    ),
 ]

@@ -69,3 +69,37 @@
 - The PDF heuristics are only tested on a generated PDF, not a real paper PDF.
 
 **Next: M2 — Repo finder** (paper links, HF Papers API, GitHub search; validation; RepoStatus; uploads).
+
+## M2 — Repo finder ✅ (2026-10-17)
+
+**Plan**
+- `models/repo.py`: `RepoCandidate`, `RepoStatus` (§9.2).
+- `repo/links.py`: GitHub/GitLab URL normalization; "release" context detection around a link.
+- `repo/github.py`, `repo/gitlab.py`: thin API clients over `PoliteClient` (token from `GITHUB_TOKEN`,
+  rate-limit errors in plain words).
+- `repo/finder.py`: sources in confidence order — paper links (+ project pages), HF Papers API,
+  GitHub search for the arXiv id (then title) in READMEs; merge; validate (exists/dead/renamed,
+  placeholder, official vs. likely-official vs. unofficial); rank; `RepoStatus` message.
+- `repo/upload.py`: zip upload (safe extraction into the workspace) and local folder path.
+- Storage: candidates + chosen repo per paper (migration 3). CLI: `portolan repos <paper>`.
+- Tests: mocked HTTP for official / unofficial / placeholder / dead / none, renames, rate limits,
+  zip safety; `-m network` test on both development papers.
+
+**Done / verified**
+- `ruff`, `pyright` (strict), `pytest`: 144 tests pass (46 new). Mocked HTTP covers official,
+  unofficial, placeholder, empty, dead, none, renamed repos, Hugging Face listings with and without
+  an author match, third-party mentions, project pages, GitLab, GitHub rate limits, and token
+  handling. Zip uploads are tested for zip-slip, symlinks, bombs and bad zips; local folders and
+  storage are covered too. CLI: `portolan repos` lists, picks, reuses stored results, `--use`, `--upload`.
+- **Network test (`pytest -m network tests/test_network_repos.py`) passes**, anonymously against GitHub:
+  1706.03762 → official `tensorflow/tensor2tensor`; 2106.09685 → official `microsoft/LoRA`.
+- M3 groundwork: external facts for tree-sitter, bge-small embeddings, FTS5 and safe shallow
+  clones are verified in `docs/notes/m3-externals.md`.
+
+**Not done / known gaps**
+- No `GET/POST /api/papers/{id}/repo...` endpoints yet (they need the papers API from M4/M5).
+- Papers with Code archive not used (spec MAY).
+- Test suite setup is slow (~0.3–0.9 s per test creating HTTPS clients; ~45 s total). Worth trimming later.
+
+**Next: M3 — Code index** (clone, tree-sitter index, config indexing, FTS5 + local embeddings,
+hybrid retrieval, library-call detection).

@@ -13,7 +13,7 @@ import hashlib
 import json
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 import httpx
@@ -53,6 +53,7 @@ class FetchResult:
     content: bytes
     content_type: str | None
     from_cache: bool
+    headers: dict[str, str] = field(default_factory=dict[str, str])  # live responses only
 
     @property
     def ok(self) -> bool:
@@ -191,6 +192,7 @@ class PoliteClient:
                     status=resp.status_code,
                     content=resp.content,
                     content_type=resp.headers.get("content-type"),
+                    headers={k.lower(): v for k, v in resp.headers.items()},
                     from_cache=False,
                 )
                 if cache:

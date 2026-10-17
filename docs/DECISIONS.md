@@ -88,6 +88,40 @@ Choices the spec left open, deviations, and things verified against real docs. N
 - **Note for the orchestrator (M4):** politeness spacing is per `PoliteClient` instance, so the
   server must share one client per process.
 
+## M2 — Repo finder (2026-10-17)
+
+- **Hugging Face Papers API verified** on real responses: `GET https://huggingface.co/api/papers/{id}`
+  returns `githubRepo` (a full URL), `githubStars`, `githubRepoAddedBy` (e.g. `"auto"`) and
+  `projectPage` only when set; neither development paper has one. Unknown ids return 404.
+- **GitHub API verified** on real responses: `/repos/{o}/{r}` (`full_name`, `owner.type`,
+  `stargazers_count`, `pushed_at`, `default_branch`, `fork`); anonymous search
+  `/search/repositories?q="<arXiv id>" in:readme&sort=stars` works (60 requests/hour; search 10/min).
+  Code search would need a token, so we search READMEs via repository search instead.
+- **Placeholder detection** uses the recursive git tree (`/git/trees/{branch}?recursive=1`; 409 means
+  an empty repo) plus the README: no source files, or ≤ 3 source files with "coming soon"-style
+  wording, is a placeholder.
+- **Official vs. unofficial, precision first:** a repo linked in the paper counts as official only when
+  it's in the abstract, next to release wording ("our code is available at…"), or on the paper's
+  project page. A repo merely mentioned in the paper (often a baseline or tool) stays *unverified*
+  (`official=None`). Hugging Face listings stay unverified unless the owner matches an author. Owner ↔
+  author matching uses the GitHub display name (family name + first initial) or the login
+  (`edwardjhu`, `ehu…` with family names of 4+ letters). GitHub-search results are *unofficial*
+  unless the owner matches an author. Only `official=True` produces "Official code found".
+- **Ranking:** dead last; then official, unverified, unofficial; then usable before placeholder; then
+  source confidence (paper link, Hugging Face, search); README cites the arXiv id; stars; recency.
+- **Request budget:** at most 6 candidates are validated per paper, and owner-name lookups for search
+  results are limited to the top 2. That's about 15 GitHub requests per paper anonymously; results
+  are cached for a day.
+- **Not used:** the Papers with Code archive (spec "MAY"); can be added as a fourth source later.
+- **Fields added to `RepoCandidate`:** `host`, `default_branch`, `cites_paper`, `status_reason`,
+  `local_path`.
+- **Uploads:** zips are extracted into `~/.portolan/workspace/<paper>/upload-<sha>/`, skipping
+  absolute or `..` paths, symlinks, `.git`/`__MACOSX`/`node_modules`, files over 50 MB, and refusing
+  more than 20,000 entries, more than 500 MB unpacked, or a compression ratio over 200. Local folders
+  are used in place, read-only. The future HTTP endpoint must only accept folder paths from localhost.
+- **HTML link text:** external links whose visible text isn't the URL now keep it in the paragraph
+  text ("our code (https://github.com/…)"), so the finder can read the words around them.
+
 ## Measured request budgets
 
 _None yet — filled in from real `portolan record` runs (M4)._

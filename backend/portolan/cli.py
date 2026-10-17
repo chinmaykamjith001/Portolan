@@ -9,7 +9,9 @@ import sys
 import httpx
 import typer
 
-from portolan.config import api_key_present, load_config, load_env, repo_root
+from portolan.config import Config, api_key_present, load_config, load_env, repo_root
+from portolan.ingest.http import PoliteClient
+from portolan.ingest.pipeline import IngestReport
 from portolan.llm.providers.gemini import list_models, suggest_models
 from portolan.models.paper import PaperDoc, PaperRef
 from portolan.store.db import Database, open_database
@@ -168,43 +170,157 @@ def ingest(
         db.close()
 
 
-async def _ingest_input(
-    raw: str, contact: str, db: Database, dry_run: bool, refresh: bool, choose: int | None
-) -> None:
-    from portolan.ingest.http import FetchError, PoliteClient
+async def _resolve_and_ingest(
+    raw: str,
+    client: PoliteClient,
+    db: Database,
+    *,
+    refresh: bool = False,
+    choose: int | None = None,
+    save: bool = True,
+) -> IngestReport:
+    """Resolve user input (asking which title match when needed) and ingest the paper."""
+    from portolan.ingest.http import FetchError
     from portolan.ingest.pipeline import IngestError, ingest_ref
     from portolan.ingest.resolver import resolve
 
-    async with PoliteClient(db, contact=contact) as client:
-        try:
-            result = await resolve(raw, client)
-            if result.error:
-                typer.echo(result.error)
+    try:
+        result = await resolve(raw, client)
+        if result.error:
+            typer.echo(result.error)
+            raise typer.Exit(code=1)
+        ref = result.ref
+        if ref is None:
+            typer.echo("Matches on arXiv:")
+            for i, c in enumerate(result.candidates, start=1):
+                who = ", ".join(c.authors[:3]) + (" et al." if len(c.authors) > 3 else "")
+                typer.echo(f"  {i}. {c.title} — {who} ({c.year}) arXiv:{c.arxiv_id}")
+            pick = choose
+            if pick is None:
+                pick = int(typer.prompt("Which one? (0 to cancel)", default="0"))
+            if not 1 <= pick <= len(result.candidates):
+                typer.echo("Cancelled.")
                 raise typer.Exit(code=1)
-            ref = result.ref
-            if ref is None:
-                typer.echo("Matches on arXiv:")
-                for i, c in enumerate(result.candidates, start=1):
-                    who = ", ".join(c.authors[:3]) + (" et al." if len(c.authors) > 3 else "")
-                    typer.echo(f"  {i}. {c.title} — {who} ({c.year}) arXiv:{c.arxiv_id}")
-                pick = choose
-                if pick is None:
-                    pick = int(typer.prompt("Which one? (0 to cancel)", default="0"))
-                if not 1 <= pick <= len(result.candidates):
-                    typer.echo("Cancelled.")
-                    raise typer.Exit(code=1)
-                c = result.candidates[pick - 1]
-                ref = PaperRef(arxiv_id=c.arxiv_id, version=c.version, title=c.title)
-            typer.echo("Reading paper…")
-            report = await ingest_ref(
-                ref, client, db, pdf_url=result.pdf_url, refresh=refresh, save=not dry_run
-            )
-        except (IngestError, FetchError) as exc:
-            typer.echo(str(exc))
-            raise typer.Exit(code=1) from None
+            c = result.candidates[pick - 1]
+            ref = PaperRef(arxiv_id=c.arxiv_id, version=c.version, title=c.title)
+        typer.echo("Reading paper…")
+        return await ingest_ref(ref, client, db, pdf_url=result.pdf_url, refresh=refresh, save=save)
+    except (IngestError, FetchError) as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from None
+
+
+async def _ingest_input(
+    raw: str, contact: str, db: Database, dry_run: bool, refresh: bool, choose: int | None
+) -> None:
+    from portolan.ingest.http import PoliteClient
+
+    async with PoliteClient(db, contact=contact) as client:
+        report = await _resolve_and_ingest(
+            raw, client, db, refresh=refresh, choose=choose, save=not dry_run
+        )
     _print_doc(report.doc, report.attempts)
     if client.requests_made:
         typer.echo(f"\n{client.requests_made} network request(s); the rest came from the cache.")
+
+
+@app.command()
+def repos(
+    paper: str = typer.Argument(..., help="arXiv link or id, DOI or title."),
+    use: int | None = typer.Option(None, help="Choose candidate N as this paper's code."),
+    upload: str | None = typer.Option(
+        None, help="Use your own code instead: a .zip file or a local folder."
+    ),
+    refresh: bool = typer.Option(False, help="Search again instead of using stored results."),
+    choose: int | None = typer.Option(None, help="For a title search: pick match N (1-3)."),
+) -> None:
+    """Find the paper's code: official repo, community implementations, or none."""
+    config = load_config()
+    db = open_database(config.storage.db_path)
+    try:
+        asyncio.run(_repos(paper, config, db, use, upload, refresh, choose))
+    finally:
+        db.close()
+
+
+async def _repos(
+    raw: str,
+    config: Config,
+    db: Database,
+    use: int | None,
+    upload: str | None,
+    refresh: bool,
+    choose: int | None,
+) -> None:
+    from pathlib import Path
+
+    from portolan.ingest.http import FetchError, PoliteClient
+    from portolan.repo.finder import RepoFinder
+    from portolan.repo.upload import UploadError, extract_zip, use_folder
+    from portolan.store.repos import choose_repo, chosen_repo, load_candidates, save_candidates
+
+    async with PoliteClient(db, contact=config.http.contact) as client:
+        doc = (await _resolve_and_ingest(raw, client, db, choose=choose)).doc
+
+        if upload:
+            path = Path(upload).expanduser()
+            try:
+                if path.suffix.lower() == ".zip" and path.is_file():
+                    cand = extract_zip(
+                        path.read_bytes(), doc.paper_id, config.storage.workspace_dir, path.name
+                    )
+                else:
+                    cand = use_folder(path)
+            except UploadError as exc:
+                typer.echo(str(exc))
+                raise typer.Exit(code=1) from None
+            choose_repo(db, doc.paper_id, cand)
+            typer.echo(f"\nUsing your code for {doc.title}: {cand.local_path}")
+            if cand.status != "ok":
+                typer.echo(f"Warning: {cand.status_reason}.")
+            return
+
+        stored = None if refresh else load_candidates(db, doc.paper_id)
+        warnings: list[str] = []
+        if stored is None:
+            typer.echo("Finding code…")
+            try:
+                result = await RepoFinder(client).find(doc)
+            except FetchError as exc:
+                typer.echo(str(exc))
+                raise typer.Exit(code=1) from None
+            candidates, status, warnings = result.candidates, result.status, result.warnings
+            save_candidates(db, doc.paper_id, candidates, status)
+        else:
+            candidates, status = stored
+
+    typer.echo(f"\n{doc.title}\n{status.message}")
+    for w in warnings:
+        typer.echo(f"Note: {w}")
+    for i, c in enumerate(candidates, start=1):
+        label = {True: "official", None: "unverified", False: "unofficial"}[c.official]
+        stars = f"★ {c.stars:,}" if c.stars is not None else ""
+        health_note = "" if c.status == "ok" else f" — {c.status}: {c.status_reason}"
+        typer.echo(f"  {i}. {c.owner}/{c.name}  [{label}] {stars}{health_note}")
+        typer.echo(f"       {c.url} · {c.official_evidence}")
+
+    if use is not None:
+        if not 1 <= use <= len(candidates):
+            typer.echo(f"There is no candidate {use}.")
+            raise typer.Exit(code=1)
+        choose_repo(db, doc.paper_id, candidates[use - 1])
+    current = chosen_repo(db, doc.paper_id)
+    if current is None and candidates and candidates[0].status == "ok":
+        choose_repo(db, doc.paper_id, candidates[0])
+        current = candidates[0]
+    if current is not None:
+        typer.echo(
+            f"\nUsing: {current.owner}/{current.name}  (change with --use N or --upload PATH)"
+        )
+    else:
+        typer.echo("\nNo code linked. Use --upload PATH to add your own implementation.")
+    if client.requests_made:
+        typer.echo(f"{client.requests_made} network request(s); the rest came from the cache.")
 
 
 def _print_doc(doc: PaperDoc, attempts: list[str]) -> None:

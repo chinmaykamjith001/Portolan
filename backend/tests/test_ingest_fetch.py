@@ -23,11 +23,11 @@ from tests.conftest import FakeClock
 from tests.ingest_helpers import FIXTURES, gz_single_tex, latex_tarball, synthetic_pdf
 
 
-def atom(*entries: tuple[str, str, list[str]]) -> bytes:
+def atom(*entries: tuple[str, str, list[str]], summary: str = "An abstract.") -> bytes:
     body = "".join(
         f"<entry><id>http://arxiv.org/abs/{eid}</id><title>{title}</title>"
         + "".join(f"<author><name>{a}</name></author>" for a in authors)
-        + "<summary>An abstract.</summary><published>2021-06-17T00:00:00Z</published></entry>"
+        + f"<summary>{summary}</summary><published>2021-06-17T00:00:00Z</published></entry>"
         for eid, title, authors in entries
     )
     return f'<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">{body}</feed>'.encode()
