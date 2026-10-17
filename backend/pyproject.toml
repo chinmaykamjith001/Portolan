@@ -17,7 +17,17 @@ dependencies = [
     "lxml>=6.1.3",
     "pylatexenc>=2.11",
     "pymupdf>=1.28.2",
+    "tree-sitter>=0.26.0",
+    "tree-sitter-python>=0.25.0",
+    "tree-sitter-yaml>=0.7.2",
+    "tree-sitter-json>=0.24.8",
+    "tree-sitter-toml>=0.7.0",
 ]
+
+[project.optional-dependencies]
+# Heavy (~750 MB with CPU torch, ~29 s import): opt in with `uv sync --extra embeddings`.
+# Without it, retrieval is BM25-only (docs/DECISIONS.md).
+embeddings = ["sentence-transformers>=6.1"]
 
 [project.scripts]
 portolan = "portolan.cli:app"

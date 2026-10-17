@@ -122,9 +122,27 @@ Choices the spec left open, deviations, and things verified against real docs. N
 - **HTML link text:** external links whose visible text isn't the URL now keep it in the paragraph
   text ("our code (https://github.com/…)"), so the finder can read the words around them.
 
+## Gemini setup (2026-10-17)
+
+- Owner's free key is in their local `.env`; `PORTOLAN_LLM_PROVIDER` stays `mock` there, and real calls
+  are made only by explicit commands with `PORTOLAN_LLM_PROVIDER=gemini`.
+- **Owner go-ahead:** the owner authorized real Gemini calls for recording fixtures without per-run
+  approval ("take as many as you want"), within the free tier. The rate limiter's caps
+  (8 RPM, 1,400 RPD) still apply. Every real run is logged below under "Measured request budgets".
+- **Model listing verified** with `portolan doctor` against the real API: 46 models. Chosen roles
+  (local `portolan.toml`, git-ignored): `fast = gemini/gemini-3.5-flash-lite`,
+  `default = strong = gemini/gemini-3.8-flash` (newest non-preview IDs; 3.8 Flash-Lite exists only as TTS).
+- **Smoke test** (2 requests, structured `{concept, gist}` output through the gateway): both roles returned
+  valid JSON. Findings: (1) `gemini-3.8-flash` spent 485 output tokens (reasoning) on a 20-word answer,
+  so M4 should set a low reasoning effort on skeleton/label calls to protect TPM; (2) LiteLLM warns that
+  `temperature`/`top_p` are deprecated for Gemini 3+ — keep passing temperature for now, and move
+  sampling guidance into system prompts if it's removed.
+
 ## Measured request budgets
 
-_None yet — filled in from real `portolan record` runs (M4)._
+| Date | Run | Requests |
+|---|---|---|
+| 2026-10-17 | Gateway smoke test (fast + default) | 2 |
 
 ## TODO(owner)
 
