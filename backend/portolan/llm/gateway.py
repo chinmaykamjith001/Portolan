@@ -120,6 +120,7 @@ class Gateway:
             template_version=template.version,
             inputs_hash=in_hash,
             role=role,
+            reasoning=template.reasoning,
         )
         parsed: BaseModel | None = None
         response: ProviderResponse | None = None

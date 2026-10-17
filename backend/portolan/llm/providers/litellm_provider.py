@@ -63,6 +63,8 @@ class LiteLLMProvider:
             "temperature": temperature,
             "num_retries": 0,  # the gateway owns retries and backoff
         }
+        if ctx.reasoning:
+            kwargs["reasoning_effort"] = ctx.reasoning
         if self.api_base:
             kwargs["api_base"] = self.api_base
         if schema is not None:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -33,3 +33,5 @@ class PromptTemplate:
     render: Callable[[dict[str, Any]], list[Message]]
     schema: type[BaseModel] | None = None
     temperature: float = 0.2
+    # Thinking budget for reasoning models (LiteLLM `reasoning_effort`); None = provider default.
+    reasoning: Literal["minimal", "low", "medium", "high"] | None = None

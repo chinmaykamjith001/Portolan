@@ -17,6 +17,7 @@ class CallContext(BaseModel):
     inputs_hash: str
     role: Role
     attempt: int = 0  # 0 = first try, 1 = the single schema-repair retry
+    reasoning: str | None = None  # from PromptTemplate.reasoning
 
 
 class Provider(Protocol):
