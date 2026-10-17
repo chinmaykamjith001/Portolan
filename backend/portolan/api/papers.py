@@ -212,6 +212,54 @@ def concept(paper_id: str, concept_id: str, request: Request) -> JSONResponse:
             "concept": c.model_dump(mode="json"),
             "also_appears_in": svc.chart.layers_containing(paper_id, concept_id),
             "issues_inside": inside,
-            "details": {"explanation": False, "code": False, "example": False, "graph": False},
+            "details": {
+                "explanation": svc.details.explanation(paper_id, concept_id, "default") is not None,
+                "code": False,
+                "example": False,
+                "graph": False,
+            },
         }
     )
+
+
+ANGLES = {"default", "simpler", "mathematical", "analogy", "why", "another_take"}
+
+
+@router.get("/papers/{paper_id}/concepts/{concept_id}/explanation")
+def explanation(
+    paper_id: str, concept_id: str, request: Request, angle: str = "default"
+) -> JSONResponse:
+    svc = services(request)
+    if angle not in ANGLES:
+        return error(400, "bad_angle", f"Unknown angle {angle!r}.")
+    if svc.chart.get_concept(paper_id, concept_id) is None:
+        return error(404, "not_found", "That concept isn't on this paper's map.")
+    stored = svc.details.explanation(paper_id, concept_id, angle)
+    if stored is not None:
+        return JSONResponse(stored.model_dump(mode="json"))
+    key = f"explain:{paper_id}:{concept_id}:{angle}"
+    svc.queue.submit(
+        "explain", key, {"concept_id": concept_id, "angle": angle},
+        priority="P0", paper_id=paper_id,
+    )  # fmt: skip
+    job = svc.queue.get(key)
+    if job is not None and job.state == "failed":
+        return error(502, "generation_failed", "Couldn't write this explanation. Try again.")
+    return JSONResponse({"status": "generating"}, status_code=202)
+
+
+@router.get("/papers/{paper_id}/links/{link_id}/explanation")
+def edge_explanation(paper_id: str, link_id: str, request: Request) -> JSONResponse:
+    from portolan.detail.explain import find_link
+
+    svc = services(request)
+    if find_link(svc.chart, paper_id, link_id) is None:
+        return error(404, "not_found", "That link isn't on this paper's map.")
+    stored = svc.details.edge(paper_id, link_id)
+    if stored is not None:
+        return JSONResponse(stored.model_dump(mode="json"))
+    svc.queue.submit(
+        "edge", f"edge:{paper_id}:{link_id}", {"link_id": link_id},
+        priority="P0", paper_id=paper_id,
+    )  # fmt: skip
+    return JSONResponse({"status": "generating"}, status_code=202)

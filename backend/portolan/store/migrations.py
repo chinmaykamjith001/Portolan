@@ -205,4 +205,26 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX jobs_state ON jobs (state, priority, created_at);
         """,
     ),
+    (
+        6,
+        "explanations and edge explanations",
+        """
+        CREATE TABLE explanations (
+            paper_id TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            angle TEXT NOT NULL,
+            explanation_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (paper_id, concept_id, angle)
+        );
+
+        CREATE TABLE edge_explanations (
+            paper_id TEXT NOT NULL,
+            link_id TEXT NOT NULL,
+            explanation_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (paper_id, link_id)
+        );
+        """,
+    ),
 ]

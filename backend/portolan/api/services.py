@@ -7,11 +7,14 @@ results land so the browser never polls.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
 from portolan.chart.master import ChartBuilder
 from portolan.config import Config
+from portolan.detail.explain import explain, explain_edge
 from portolan.ingest.http import PoliteClient
 from portolan.ingest.pipeline import ingest_ref
 from portolan.llm.gateway import Gateway
@@ -22,8 +25,23 @@ from portolan.orchestrator.queue import Job, JobQueue
 from portolan.repo.finder import RepoFinder
 from portolan.store.chart import ChartStore
 from portolan.store.db import Database
+from portolan.store.details import DetailStore
 from portolan.store.papers import load_paper
 from portolan.store.repos import choose_repo, chosen_repo, save_candidates
+
+# The paper whose job is running in this task, so gateway events (rate limits) reach its SSE stream.
+current_paper: ContextVar[str | None] = ContextVar("current_paper", default=None)
+
+
+def _with_paper(handler: Callable[[Job], Awaitable[None]]) -> Callable[[Job], Awaitable[None]]:
+    async def run(job: Job) -> None:
+        token = current_paper.set(job.paper_id)
+        try:
+            await handler(job)
+        finally:
+            current_paper.reset(token)
+
+    return run
 
 
 @dataclass
@@ -35,6 +53,7 @@ class Services:
     bus: EventBus
     queue: JobQueue
     chart: ChartStore
+    details: DetailStore
 
     def progress(self, paper_id: str, stage: str, percent: int, message: str) -> None:
         self.bus.publish(
@@ -56,11 +75,22 @@ class Services:
     # -- jobs -----------------------------------------------------------------------------
 
     def register_handlers(self) -> None:
-        self.queue.register("ingest", self._ingest)
-        self.queue.register("repos", self._repos)
-        self.queue.register("chart_master", self._chart_master)
-        self.queue.register("frontier", self._frontier)
-        self.queue.register("skeleton", self._skeleton)
+        handlers = {
+            "ingest": self._ingest,
+            "repos": self._repos,
+            "chart_master": self._chart_master,
+            "frontier": self._frontier,
+            "skeleton": self._skeleton,
+            "explain": self._explain,
+            "edge": self._edge,
+        }
+        for kind, handler in handlers.items():
+            self.queue.register(kind, _with_paper(handler))
+
+    def on_gateway_event(self, kind: str, data: dict[str, Any]) -> None:
+        paper_id = current_paper.get()
+        if kind == "rate_limited" and paper_id is not None:
+            self.bus.publish(paper_id, "rate_limited", data)
 
     async def _ingest(self, job: Job) -> None:
         paper_id = str(job.paper_id)
@@ -130,6 +160,29 @@ class Services:
             "frontier", f"frontier:{paper_id}:{concept_id}", {"layer_id": concept_id},
             priority="P1", paper_id=paper_id, front=True,
         )  # fmt: skip
+
+    async def _explain(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        doc = self.paper(paper_id)
+        if doc is None:
+            return
+        concept_id, angle = str(job.payload["concept_id"]), job.payload.get("angle", "default")
+        explanation, _warnings = await explain(doc, self.gateway, self.chart, concept_id, angle)
+        self.details.save_explanation(paper_id, explanation)
+        self.bus.publish(
+            paper_id,
+            "detail_ready",
+            {"concept_id": concept_id, "part": "explanation", "angle": angle},
+        )
+
+    async def _edge(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        doc = self.paper(paper_id)
+        if doc is None:
+            return
+        link_id = str(job.payload["link_id"])
+        self.details.save_edge(paper_id, await explain_edge(doc, self.gateway, self.chart, link_id))
+        self.bus.publish(paper_id, "detail_ready", {"link_id": link_id, "part": "edge"})
 
     def job_states(self, paper_id: str) -> dict[str, str]:
         states: dict[str, str] = {}

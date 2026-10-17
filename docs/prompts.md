@@ -12,9 +12,9 @@ fixtures. Rendered prompts are snapshot-tested.
 | `canonical_same_concept` | 1 | fast | M4 | written |
 | `route_section` | – | fast | M7 | not written |
 | `sub_route` | – | fast | M7 | not written |
-| `explain` | – | default | M5/M6 | not written |
+| `explain` | 1 | default | M5 | written (default angle) |
 | `explain_angle` | – | default | M6 | not written |
-| `edge_explain` | – | default | M5/M6 | not written |
+| `edge_explain` | 1 | default | M5 | written |
 | `ground_code` | – | default | M6 | not written |
 | `rerank_spans` | – | fast | M3/M6 | not written |
 | `example_program` | – | default | M6 | not written |

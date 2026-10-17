@@ -20,6 +20,7 @@ from portolan.orchestrator.events import EventBus
 from portolan.orchestrator.queue import JobQueue
 from portolan.store.chart import ChartStore
 from portolan.store.db import open_database
+from portolan.store.details import DetailStore
 
 
 def error_response(status: int, code: str, message: str) -> JSONResponse:
@@ -29,7 +30,7 @@ def error_response(status: int, code: str, message: str) -> JSONResponse:
 def build_services(config: Config) -> Services:
     db = open_database(config.storage.db_path)
     bus = EventBus()
-    return Services(
+    svc = Services(
         config=config,
         db=db,
         gateway=init_gateway(config, db),
@@ -37,7 +38,10 @@ def build_services(config: Config) -> Services:
         bus=bus,
         queue=JobQueue(db, bus=bus, workers=2),
         chart=ChartStore(db),
+        details=DetailStore(db),
     )
+    svc.gateway.on_event = svc.on_gateway_event
+    return svc
 
 
 def create_app(config: Config | None = None, services: Services | None = None) -> FastAPI:

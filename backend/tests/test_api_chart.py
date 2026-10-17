@@ -108,7 +108,7 @@ def client(tmp_path: Path, fake: FakeChartLLM) -> Iterator[TestClient]:
     config.llm.models = ModelsConfig(fast="f", default="d", strong="s")
     config.storage.home = tmp_path / "home"
     svc = build_services(config)
-    svc.gateway = Gateway(config, svc.db, provider=fake)
+    svc.gateway = Gateway(config, svc.db, provider=fake, on_event=svc.on_gateway_event)
     hosts = ("export.arxiv.org", "arxiv.org", "huggingface.co", "api.github.com")
     no_wait = {h: 0.0 for h in hosts}
     svc.http = PoliteClient(svc.db, spacing=no_wait)

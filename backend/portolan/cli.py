@@ -419,6 +419,30 @@ async def _index(
             typer.echo(f"  {hit.score:7.3f}  {s.path}:{s.start_line}-{s.end_line}  {s.qualname}")
 
 
+@app.command()
+def schema(out: str = typer.Option("", help="Write to this file instead of stdout.")) -> None:
+    """Print the JSON Schema of every API model (for generating frontend types)."""
+    import json
+    from pathlib import Path
+
+    from pydantic import BaseModel
+
+    from portolan.models.concept import Concept, Layer, Link
+    from portolan.models.detail import EdgeExplanation, Explanation
+    from portolan.models.paper import PaperDoc
+    from portolan.models.repo import RepoCandidate, RepoStatus
+
+    models: list[type[BaseModel]] = [
+        Concept, Link, Layer, PaperDoc, RepoCandidate, RepoStatus, Explanation, EdgeExplanation,
+    ]  # fmt: skip
+    text = json.dumps({m.__name__: m.model_json_schema() for m in models}, indent=2)
+    if out:
+        Path(out).write_text(text + "\n", encoding="utf-8")
+        typer.echo(f"Wrote {len(models)} schemas to {out}")
+    else:
+        typer.echo(text)
+
+
 RECORD_STEPS = ("master", "skeleton")
 
 
