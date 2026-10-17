@@ -1,0 +1,152 @@
+// Shapes returned by the backend (spec §9, §12). Mirrors backend/portolan/models/*.
+// TODO(M11): generate from the backend JSON Schema with `pnpm gen:types`.
+
+export type Grounding = "in_code" | "in_library" | "shown_by_running" | "concept_only" | "unknown";
+export type GenState = "skeleton" | "detailed" | "generating" | "failed";
+export type LinkKind = "part_of" | "uses" | "causes" | "enables" | "contrasts" | "example_of" | "other";
+
+export interface Concept {
+  id: string;
+  canonical_name: string;
+  title: string;
+  gist: string;
+  grounding: Grounding;
+  is_first_principle: boolean;
+  depth: number;
+  anchors: string[];
+  has_layer: boolean;
+  gen_state: GenState;
+  issue_count_self: number;
+}
+
+export interface Link {
+  id: string; // "<layer_id>:<source>-><target>"
+  layer_id: string;
+  source: string;
+  target: string;
+  label: string;
+  kind: LinkKind;
+}
+
+export interface Layer {
+  id: string; // concept id, or "master"
+  paper_id: string;
+  center: string;
+  concepts: string[];
+  links: Link[];
+  gen_state: GenState;
+}
+
+export interface LayerPayload {
+  layer: Layer;
+  concepts: Record<string, Concept>;
+}
+
+export interface ConceptPayload {
+  concept: Concept;
+  also_appears_in: string[];
+  issues_inside: number;
+  details: { explanation: boolean; code: boolean; example: boolean; graph: boolean };
+}
+
+export interface RepoStatus {
+  kind: "official_found" | "unofficial_only" | "placeholder_only" | "none";
+  message: string;
+}
+
+export interface RepoCandidate {
+  id: string;
+  url: string;
+  owner: string;
+  name: string;
+  official: boolean | null;
+  official_evidence: string | null;
+  status: "ok" | "placeholder" | "dead" | "unknown";
+  stars: number | null;
+}
+
+export interface PaperInfo {
+  paper_id: string;
+  status: "ready" | "processing";
+  title?: string;
+  authors?: string[];
+  arxiv_id?: string | null;
+  version?: string | null;
+  low_structure?: boolean;
+  repo_status?: RepoStatus | null;
+  repo?: RepoCandidate | null;
+  chart_ready?: boolean;
+  jobs?: Record<string, string>;
+}
+
+export interface TitleCandidate {
+  arxiv_id: string;
+  version: string | null;
+  title: string;
+  authors: string[];
+  year: string;
+}
+
+export type CreatePaperResult =
+  | { paper_id: string; status: "queued" | "ready" }
+  | { status: "needs_choice"; candidates: TitleCandidate[] };
+
+export type Angle = "default" | "simpler" | "mathematical" | "analogy" | "why" | "another_take";
+
+export interface ExplanationSections {
+  what_it_is: string;
+  how_it_works: string;
+  why_its_here: string;
+  where_it_appears: string[]; // anchor ids
+  common_confusion: string;
+}
+
+export interface Explanation {
+  concept_id: string;
+  angle: Angle;
+  gist: string;
+  sections: ExplanationSections;
+  body_markdown: string;
+  anchors_cited: string[];
+  model: string;
+}
+
+export interface EdgeExplanation {
+  link_id: string;
+  headline: string;
+  body_markdown: string;
+  why_it_matters: string;
+}
+
+export interface Budget {
+  day: string;
+  requests_today: number;
+  limits: { rpm: number; rpd: number; tpm: number };
+  provider: string;
+  models: { model: string; requests_today: number; cooling_down_seconds: number }[];
+}
+
+export interface Pending {
+  status: "generating" | "pending" | "processing";
+}
+
+export type SseType =
+  | "progress"
+  | "layer_ready"
+  | "concept_updated"
+  | "detail_ready"
+  | "route_ready"
+  | "finding_added"
+  | "faq_ready"
+  | "rate_limited"
+  | "error";
+
+export interface ProgressEvent {
+  stage: string;
+  percent: number;
+  message: string;
+}
+
+export interface ApiErrorBody {
+  error: { code: string; message: string };
+}
