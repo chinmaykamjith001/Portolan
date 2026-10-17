@@ -126,3 +126,26 @@ config indexer, FTS5 store + hybrid retrieval — integrated by `code/indexer.py
 - Test suite takes ~70 s (per-test HTTPS client setup); worth trimming.
 
 **Next: M4 — Chart generation** (first real LLM use).
+
+## M4 — Chart generation ✅ (2026-10-17)
+
+**Plan**: contracts first (concept models, output schemas, migration 5), then parallel sessions for
+prompt templates, the orchestrator queue + SSE bus, and the chart store/canonicalization/issue
+roll-up; the builder, record CLI, API and recording done here.
+
+**Done / verified**
+- `ruff`, `pyright` (strict), `pytest`: 323 tests pass. API flow test (fake LLM): paste → ingest →
+  master layer (invented anchors and links removed, section-name concept dropped) → background
+  frontier two levels deep → layer and concept endpoints → SSE events.
+- **Real recordings** with the owner's free key: LoRA (14 concepts, 61 child layers, 12 requests)
+  and Attention (13 concepts, 55 child layers, 11 requests). Concepts are ideas, e.g. "Intrinsic Rank
+  Hypothesis", "Weight Merging at Inference", "Scaled Dot-Product Attention", "Label Smoothing".
+- **Acceptance replay** (`pytest -m network tests/test_network_chart_replay.py`): both papers
+  rebuild entirely from fixtures with 10-20 concepts, no structural section names, labeled links,
+  and two skeleton levels below every decomposable concept; zero real requests.
+
+**Not done / known gaps**
+- Rate-limit events aren't routed to per-paper SSE yet; PDF multipart upload endpoint deferred to M5.
+- A few orphaned skeleton fixtures remain from the discarded first Attention run (harmless).
+
+**Next: M5 — Frontend shell + Chart view.**

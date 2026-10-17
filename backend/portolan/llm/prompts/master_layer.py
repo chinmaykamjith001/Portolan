@@ -20,7 +20,8 @@ PARAGRAPH_CHARS = 1_200  # one paragraph (or caption) never takes more than this
 SCHEMA_TEXT = json.dumps(MasterLayerOut.model_json_schema(), indent=2)
 
 # Abbreviated: a real reply has 10-20 concepts.
-EXAMPLE = MasterLayerOut(
+# model_construct: the example is deliberately shorter than the 10-concept minimum.
+EXAMPLE = MasterLayerOut.model_construct(
     center=CenterOut(
         title="Transformer",
         gist="A sequence-to-sequence model built only from attention, with no recurrence.",
@@ -92,7 +93,7 @@ phrase so that "source - label -> target" reads as a sentence ("replaces", "is c
 concepts, not only links from the center. kind is one of the schema's values; use "other" when \
 none fits.
 
-Example of a valid reply (abbreviated to 3 concepts; yours has 10-20):
+Example of the reply format (it shows only 3 concepts to save space; your reply MUST contain 10-20):
 ```json
 {EXAMPLE.model_dump_json(indent=2)}
 ```
@@ -174,7 +175,7 @@ def render(inputs: dict[str, Any]) -> list[Message]:
 
 TEMPLATE = PromptTemplate(
     id="master_layer",
-    version=1,
+    version=2,
     render=render,
     schema=MasterLayerOut,
     temperature=0.2,

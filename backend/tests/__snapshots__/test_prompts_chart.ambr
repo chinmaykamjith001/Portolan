@@ -189,6 +189,8 @@
               "items": {
                 "$ref": "#/$defs/ConceptOut"
               },
+              "maxItems": 20,
+              "minItems": 10,
               "title": "Concepts",
               "type": "array"
             },
@@ -221,7 +223,7 @@
         - grounding_guess: "in_code" if a code repository implementing the paper would contain it, "in_library" if it would come from a standard library (an optimizer, a tokenizer), "concept_only" for pure ideas, motivations or results, "unknown" if unsure.
         - links: directed; source and target are concept keys or "center". The label is a short verb phrase so that "source - label -> target" reads as a sentence ("replaces", "is computed by", "is order-blind, so needs"). Aim for 1-2 links per concept and include cross-links between concepts, not only links from the center. kind is one of the schema's values; use "other" when none fits.
         
-        Example of a valid reply (abbreviated to 3 concepts; yours has 10-20):
+        Example of the reply format (it shows only 3 concepts to save space; your reply MUST contain 10-20):
         ```json
         {
           "center": {
@@ -429,6 +431,8 @@
                   "items": {
                     "$ref": "#/$defs/ConceptOut"
                   },
+                  "maxItems": 10,
+                  "minItems": 4,
                   "title": "Concepts",
                   "type": "array"
                 },

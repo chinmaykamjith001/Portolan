@@ -1,4 +1,4 @@
-"""FastAPI application. Routers for papers, chart, route, etc. are added milestone by milestone."""
+"""FastAPI application: health, budget, and the paper/chart routes (spec §12)."""
 
 from __future__ import annotations
 
@@ -6,12 +6,19 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from portolan import __version__
+from portolan.api.papers import router as papers_router
+from portolan.api.services import Services
 from portolan.config import Config, api_key_present, load_config
-from portolan.llm.gateway import Gateway, init_gateway
+from portolan.ingest.http import PoliteClient
+from portolan.llm.gateway import init_gateway
+from portolan.orchestrator.events import EventBus
+from portolan.orchestrator.queue import JobQueue
+from portolan.store.chart import ChartStore
 from portolan.store.db import open_database
 
 
@@ -19,27 +26,47 @@ def error_response(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}})
 
 
-def create_app(config: Config | None = None, gateway: Gateway | None = None) -> FastAPI:
+def build_services(config: Config) -> Services:
+    db = open_database(config.storage.db_path)
+    bus = EventBus()
+    return Services(
+        config=config,
+        db=db,
+        gateway=init_gateway(config, db),
+        http=PoliteClient(db, contact=config.http.contact),
+        bus=bus,
+        queue=JobQueue(db, bus=bus, workers=2),
+        chart=ChartStore(db),
+    )
+
+
+def create_app(config: Config | None = None, services: Services | None = None) -> FastAPI:
     config = config or load_config()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        if gateway is None:
-            db = open_database(config.storage.db_path)
-            app.state.gateway = init_gateway(config, db)
-            try:
-                yield
-            finally:
-                db.close()
-        else:
-            app.state.gateway = gateway
+        svc = services or build_services(config)
+        svc.register_handlers()
+        app.state.services = svc
+        await svc.queue.start()
+        try:
             yield
+        finally:
+            await svc.queue.stop()
+            if services is None:
+                await svc.http.aclose()
+                svc.db.close()
 
     app = FastAPI(title="Portolan", version=__version__, lifespan=lifespan)
+    app.include_router(papers_router)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(_request: Request, exc: StarletteHTTPException) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
         return error_response(exc.status_code, "http_error", str(exc.detail))
+
+    @app.exception_handler(RequestValidationError)
+    async def bad_request(_request: Request, _exc: RequestValidationError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        return error_response(422, "bad_request", "The request was missing something or malformed.")
 
     @app.exception_handler(Exception)
     async def unhandled(_request: Request, _exc: Exception) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
@@ -47,7 +74,7 @@ def create_app(config: Config | None = None, gateway: Gateway | None = None) -> 
 
     @app.get("/api/health")
     def health(request: Request) -> dict[str, object]:  # pyright: ignore[reportUnusedFunction]
-        gw: Gateway = request.app.state.gateway
+        svc: Services = request.app.state.services
         provider = config.llm.provider
         return {
             "status": "ok",
@@ -61,12 +88,12 @@ def create_app(config: Config | None = None, gateway: Gateway | None = None) -> 
                 if provider == "gemini"
                 else None
             ),
-            "gateway_provider": gw.provider.name,
+            "gateway_provider": svc.gateway.provider.name,
         }
 
     @app.get("/api/budget")
     def budget(request: Request) -> dict[str, object]:  # pyright: ignore[reportUnusedFunction]
-        gw: Gateway = request.app.state.gateway
-        return gw.budget_state()
+        svc: Services = request.app.state.services
+        return svc.gateway.budget_state()
 
     return app

@@ -52,8 +52,22 @@ def _clean(text: str, limit: int = 300) -> str:
 
 
 def _section_names(doc: PaperDoc) -> set[str]:
-    names = {canonical_name(a.text) for a in doc.by_kind("section")}
-    return names | GENERIC_SECTION_WORDS
+    """Structural section names that must not become concepts ("Results", "Training setup").
+
+    A subsection titled after an idea ("Label Smoothing", "Scaled Dot-Product Attention") is a
+    legitimate concept: the spec's own examples include them. So only generic structural names
+    count, plus paper section titles made only of generic words ("Experimental Setup").
+    """
+    generic_words = {w for name in GENERIC_SECTION_WORDS for w in name.split()} | {
+        "experimental", "detail", "details", "implementation", "analysis", "future", "work",
+        "limitation", "limitations", "and", "of", "the",
+    }  # fmt: skip
+    structural = {
+        canonical_name(a.text)
+        for a in doc.by_kind("section")
+        if set(canonical_name(a.text).split()) <= generic_words
+    }
+    return structural | GENERIC_SECTION_WORDS
 
 
 def _grounding(guess: str) -> Grounding:

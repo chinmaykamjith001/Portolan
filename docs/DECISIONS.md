@@ -159,6 +159,33 @@ Verified facts behind these choices: [docs/notes/m3-externals.md](notes/m3-exter
   `LoRALayer`) defeat BM25 alone; embeddings + the M6 LLM rerank are meant to close it. Bulky example
   folders (a vendored copy of transformers under `examples/`) also add noise; consider a path prior in M6.
 
+## M4 — Chart generation (2026-10-17)
+
+- **Count limits live in the schema:** `MasterLayerOut.concepts` must have 10-20 items and each
+  skeleton layer 4-10 (Pydantic `min_length`/`max_length`). The first real call returned 1 concept
+  when the count was only stated in the prompt; with the schema limit, a short answer fails
+  validation and gets the gateway's one repair retry. Template versions were bumped to 2. Worked
+  examples in prompts are built with `model_construct` because they are deliberately short.
+- **"Not section names" means structural names only.** Dropping every concept that matches a
+  section title removed Attention's core ideas ("Scaled Dot-Product Attention", "Label Smoothing" are
+  subsection titles *and* the right concepts). Now only generic names ("Results", "Training",
+  "Experimental Setup": titles made only of generic words) are dropped.
+- **Validation of LLM structure:** anchors not in the paper are removed; links whose ends are
+  unknown, self-loops and duplicates are dropped (and reported as warnings); a child layer never
+  contains its own center or ancestors; shared concepts keep their smallest depth.
+- **Reasoning effort per template:** master `medium`, skeleton `low`, same-concept `minimal`
+  (`PromptTemplate.reasoning` → LiteLLM `reasoning_effort`).
+- **Frontier:** ingest builds master + two skeleton levels (P1 after the P0 master). Opening a layer
+  re-queues its frontier at the front of P1; jumping into a concept without a layer is a P0 job.
+- **API in M4:** `POST /api/papers` resolves the input (and arXiv version) synchronously so it can
+  return the versioned `paper_id`, then enqueues ingest. Titles return `needs_choice` with
+  candidates. PDF upload via multipart waits for M5 (it needs `python-multipart`).
+- **Record mode** writes fixtures for cached answers too, so a re-record never misses calls. Mock
+  fixtures are keyed by template version + inputs hash; the replay test needs the same model ids in
+  config because the response cache key includes the model.
+- **Rate-limit events** from the gateway aren't yet routed to a paper's SSE stream (the gateway has
+  no paper context); to wire in M5 with the budget indicator.
+
 ## Gemini setup (2026-10-17)
 
 - Owner's free key is in their local `.env`; `PORTOLAN_LLM_PROVIDER` stays `mock` there, and real calls
@@ -180,6 +207,14 @@ Verified facts behind these choices: [docs/notes/m3-externals.md](notes/m3-exter
 | Date | Run | Requests |
 |---|---|---|
 | 2026-10-17 | Gateway smoke test (fast + default) | 2 |
+| 2026-10-17 | LoRA master layer (v1 prompt, returned 1 concept; discarded) | 1 |
+| 2026-10-17 | LoRA master layer (v2) | 1 |
+| 2026-10-17 | LoRA skeletons, two levels (61 child layers) | 11 |
+| 2026-10-17 | Attention master + skeletons (section filter too strict; partly discarded) | 8 |
+| 2026-10-17 | Attention skeletons after the filter fix (55 child layers) | 10 |
+
+Per paper, initial Chart processing took **12 requests (LoRA)** and **11 requests (Attention)**:
+1 master plus 10-11 skeleton batches of 6. The §5.3 estimate was ~20 (1-2 + ~4 + ~15).
 
 ## TODO(owner)
 

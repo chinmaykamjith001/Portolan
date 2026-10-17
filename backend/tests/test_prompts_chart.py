@@ -113,16 +113,18 @@ def test_canonical_same_concept_snapshot(snapshot: SnapshotAssertion) -> None:
 
 
 @pytest.mark.parametrize(
-    ("module", "template_id", "reasoning"),
+    ("module", "template_id", "version", "reasoning"),
     [
-        (master_layer, "master_layer", "medium"),
-        (skeleton_batch, "skeleton_batch", "low"),
-        (canonical_same_concept, "canonical_same_concept", "minimal"),
+        (master_layer, "master_layer", 2, "medium"),
+        (skeleton_batch, "skeleton_batch", 2, "low"),
+        (canonical_same_concept, "canonical_same_concept", 1, "minimal"),
     ],
 )
-def test_template_metadata(module: ModuleType, template_id: str, reasoning: str) -> None:
+def test_template_metadata(
+    module: ModuleType, template_id: str, version: int, reasoning: str
+) -> None:
     t = module.TEMPLATE
-    assert (t.id, t.version, t.temperature, t.reasoning) == (template_id, 1, 0.2, reasoning)
+    assert (t.id, t.version, t.temperature, t.reasoning) == (template_id, version, 0.2, reasoning)
     assert t.schema is not None
 
 
@@ -134,7 +136,10 @@ def test_schema_text_is_the_model_json_schema(module: ModuleType) -> None:
     assert f"```json\n{module.SCHEMA_TEXT}\n```" in system
     blocks = re.findall(r"```json\n(.*?)\n```", system, re.DOTALL)
     assert json.loads(blocks[0]) == schema.model_json_schema()
-    schema.model_validate_json(blocks[1])  # the worked example is a valid reply
+    # The worked example has the reply's exact shape, but is shorter than the count minimums.
+    example = json.loads(blocks[1])
+    schema.model_construct(**example)
+    assert set(example) == set(schema.model_fields)
     assert system.endswith(UNTRUSTED_NOTICE)
 
 

@@ -35,7 +35,7 @@ SCHEMA_TEXT = json.dumps(SkeletonBatchOut.model_json_schema(), indent=2)
 # Abbreviated: a real layer has min_children..max_children sub-concepts.
 EXAMPLE = SkeletonBatchOut(
     layers=[
-        SkeletonLayerOut(
+        SkeletonLayerOut.model_construct(
             center_key="softmax",
             concepts=[
                 ConceptOut(
@@ -154,7 +154,7 @@ def render(inputs: dict[str, Any]) -> list[Message]:
 
 TEMPLATE = PromptTemplate(
     id="skeleton_batch",
-    version=1,
+    version=2,
     render=render,
     schema=SkeletonBatchOut,
     temperature=0.2,
