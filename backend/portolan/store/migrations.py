@@ -70,4 +70,90 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        4,
+        "code index, full-text search and embeddings",
+        """
+        CREATE TABLE code_indexes (
+            repo_id TEXT NOT NULL,
+            commit_sha TEXT NOT NULL,
+            root TEXT NOT NULL,
+            index_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (repo_id, commit_sha)
+        );
+
+        CREATE TABLE code_files (
+            repo_id TEXT NOT NULL,
+            commit_sha TEXT NOT NULL,
+            path TEXT NOT NULL,
+            language TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            n_lines INTEGER NOT NULL,
+            text TEXT NOT NULL,  -- notebooks: the joined code cells (FileIndex.virtual_text)
+            PRIMARY KEY (repo_id, commit_sha, path)
+        );
+
+        CREATE TABLE code_symbols (
+            repo_id TEXT NOT NULL,
+            commit_sha TEXT NOT NULL,
+            symbol_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            name TEXT NOT NULL,
+            qualname TEXT NOT NULL,
+            path TEXT NOT NULL,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER NOT NULL,
+            docstring TEXT,
+            signature TEXT,
+            value TEXT,
+            parent TEXT,
+            PRIMARY KEY (repo_id, commit_sha, symbol_id)
+        );
+        CREATE INDEX code_symbols_path ON code_symbols (repo_id, commit_sha, path);
+
+        CREATE TABLE code_imports (
+            repo_id TEXT NOT NULL,
+            commit_sha TEXT NOT NULL,
+            path TEXT NOT NULL,
+            line INTEGER NOT NULL,
+            module TEXT NOT NULL,
+            names_json TEXT NOT NULL,
+            alias TEXT
+        );
+        CREATE INDEX code_imports_path ON code_imports (repo_id, commit_sha, path);
+
+        CREATE TABLE code_calls (
+            repo_id TEXT NOT NULL,
+            commit_sha TEXT NOT NULL,
+            path TEXT NOT NULL,
+            line INTEGER NOT NULL,
+            callee TEXT NOT NULL,
+            in_symbol TEXT
+        );
+        CREATE INDEX code_calls_path ON code_calls (repo_id, commit_sha, path);
+
+        -- repo_key = "<repo_id>@<commit_sha>". bm25() weights go in column order (spec §10.4).
+        CREATE VIRTUAL TABLE code_fts USING fts5(
+            symbol_id UNINDEXED,
+            repo_key UNINDEXED,
+            name,
+            name_parts,
+            docstring,
+            body,
+            path,
+            tokenize = "unicode61 tokenchars '_'"
+        );
+
+        CREATE TABLE code_embeddings (
+            repo_id TEXT NOT NULL,
+            commit_sha TEXT NOT NULL,
+            symbol_id TEXT NOT NULL,
+            model TEXT NOT NULL,
+            dim INTEGER NOT NULL,
+            vector BLOB NOT NULL,  -- little-endian float32 x dim
+            PRIMARY KEY (repo_id, commit_sha, model, symbol_id)
+        );
+        """,
+    ),
 ]

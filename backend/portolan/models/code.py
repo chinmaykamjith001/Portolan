@@ -43,7 +43,7 @@ class Symbol(BaseModel):
     start_line: int  # 1-based, inclusive
     end_line: int
     docstring: str | None = None
-    signature: str | None = None  # first line of a def/class, e.g. "def forward(self, x, mask=None):"
+    signature: str | None = None  # first line of a def/class: "def forward(self, x, mask=None):"
     value: str | None = None  # source text of the value for constants / defaults / config keys
     parent: str | None = None  # qualname of the enclosing class/function, if any
 

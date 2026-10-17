@@ -1,0 +1,1 @@
+"""Toy transformer (synthetic fixture)."""

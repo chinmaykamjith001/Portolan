@@ -61,12 +61,14 @@ addopts = "-m 'not network'"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["tests/fixtures"]  # synthetic papers/repos are test data, not our code
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.pyright]
 include = ["portolan", "tests"]
+exclude = ["tests/fixtures", "**/.venv"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 strict = ["portolan"]

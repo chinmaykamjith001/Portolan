@@ -20,6 +20,8 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("PORTOLAN_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("PORTOLAN_NO_DOTENV", "1")
+    # The owner's real portolan.toml / .env live at the repo root; tests must never read them.
+    monkeypatch.setattr("portolan.config.repo_root", lambda: tmp_path)
     monkeypatch.chdir(tmp_path)
 
 
