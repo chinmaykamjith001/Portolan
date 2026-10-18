@@ -23,6 +23,7 @@ dependencies = [
     "tree-sitter-json>=0.24.8",
     "tree-sitter-toml>=0.7.0",
     "python-multipart>=0.0.32",
+    "numpy>=2.5.4",
 ]
 
 [project.optional-dependencies]

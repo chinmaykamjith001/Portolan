@@ -257,3 +257,26 @@ _None yet._
   container, dev build: median 59.9 fps while panning (p95 frame 17-33 ms). The assertion is a
   median of at least 50 fps.
 
+
+## M6 sandbox (`backend/portolan/sandbox/`)
+
+- **numpy added as a runtime dependency**: spec §10.7.3 allows it in example and graph programs, and
+  it wasn't installed. Pre-imported in the child with `numpy.random/linalg/fft/polynomial`.
+- **Layers** (each independent): (1) `ast` check — import allowlist (`math statistics fractions json
+  numpy`), no `open/exec/eval/compile/getattr/...`, no names or attributes starting with `_`,
+  no string constants containing `__` (blocks `"{0.__class__}".format`), no numpy file IO
+  (`load/save/fromfile/memmap/...`), 8 KB cap. (2) Separate process: `python -I`, empty temp cwd,
+  explicit minimal env (no parent variables, so no API key), stdin closed, new session so the whole
+  process group is killed on timeout, stdout capped at 64 KB. (3) In the child: `RLIMIT_CPU/AS/NOFILE/
+  FSIZE/CORE`, reduced `builtins` and a guarded `__import__`, and a `sys.addaudithook` that allows
+  reads only inside the interpreter's install (plus `/proc/self`, `/dev/urandom`), allows directory
+  listing only there, and blocks writes, sockets, subprocesses, `os.system/fork/exec/remove/...`
+  and ctypes. (4) `unshare -n` (empty network namespace) when it works for the current user
+  (`-r -n` as a fallback); otherwise a warning is logged once and layers 1-3 stand alone.
+- **Memory limit** is headroom on top of what the imports already mapped (`RLIMIT_AS` =
+  address space after importing numpy + `memory_mb`), because numpy maps far more than it uses.
+- **Limitations**: Windows gets the timeout and the static check only (no `resource`, no process
+  group); macOS doesn't enforce `RLIMIT_AS`, so the memory limit is best-effort there. The
+  audit hook is a guard rail, not a security boundary against a determined attacker — the
+  Docker mode in the spec (`sandbox.mode = "docker"`) remains the stronger option and is not built.
+  Programs are LLM-written from paper text, so untrusted-input prompt injection is the threat model.
