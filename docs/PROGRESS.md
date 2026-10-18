@@ -209,8 +209,62 @@ arrow callouts and an in-house SVG graph renderer.
 `make record ARGS="--paper 2106.09685 --steps explain,ground,example,graph --yes"` (~60 requests) and the
 same for `1706.03762`. `ground` needs the repo cloned and indexed first (the command does it).
 
-## M7–M9 (in progress)
+## M7 — Route ✅ (2026-10-18)
 
-**Plan**: contracts first (models, migrations 8-10, stores, job handlers and triggers, routers, frontend
-types/hooks, store fields, placeholder views — committed), then parallel pieces: Route backend + view,
-verification engine + findings UI, FAQ backend + view, SciCoQA eval harness.
+**Done / verified**
+- Route backend: stops come deterministically from the paper's section tree (appendices become side roads,
+  never stops); one `fast` call per top-level section writes titles, roles, ≤40-word summaries, concept
+  links and transitions; invalid concept ids dropped; heading-title fallback when a call fails; recurring
+  concept fields; lazy sub-routes. Stop order matches section order (tested).
+- Route view: deterministic S layout (pure functions with coordinate test vectors), curved connectors with
+  arrowheads, segment markers, Next/Previous and arrow keys with panning, jump in/out that stays on the
+  Route, "Show on Chart" / "Find on Route", reduced-motion path.
+- Playwright: 5 Route specs pass (order and S positions, keys, sub-route round trip, cross-links, reduced
+  motion).
+
+**Not done / known gaps**: no real route recordings (see Recording); side-road stubs are labels only;
+"Find on Route" looks at the main route only; no 300-stop Route perf test.
+
+## M8 — Verification ✅ (2026-10-18)
+
+**Done / verified**
+- Engine: claim extraction, localization, check ladder (`literal_match` and `static` need no LLM, then
+  `llm_judge`), reverse pass for undocumented behavior, precision-first threshold (0.7), resumable runs,
+  findings mapped to concepts with issue roll-up and live SSE.
+- Acceptance fixture (3 planted mismatches, 5 correct claims): 3 of 3 found, 0 false mismatches; two are
+  decided with no LLM. **The judge's replies in this test are scripted** — it tests the pipeline, not model
+  quality.
+- UI: findings count in the paper strip, Findings panel (mismatches and undocumented behavior by default,
+  matches and uncertain behind a toggle), drawer verdict, Code tab verdict box, mismatch glyph and
+  issues-inside badge on Chart nodes.
+
+**Not done**: `executed_test` method (needs Docker).
+
+## M9 — FAQ ✅ (2026-10-18)
+
+**Done / verified**
+- Sources: OpenReview reviews and rebuttals, GitHub issues, findings, anticipated questions; clustering,
+  grounded answers with validated citations, at most 4 requests per paper; Ask box with an explicit
+  "not supported by the sources" path.
+- View: filters by source with counts, cited anchors, "Show on Chart" / "Find on Route", loading, empty
+  and error states, `/` focuses the ask box.
+
+**Not verified**: OpenReview and GitHub response shapes follow their documentation; they were never
+fetched (network blocked here). Run `pytest -m network tests/test_network_faq.py -s` locally.
+**Not done**: paper-page discussions (optional source).
+
+## M10 — Evaluation harness ✅ (2026-10-18)
+
+**Done**: loader, deterministic sampling, resumable checkpoints, cost estimate, graceful stop at the
+daily budget, scorer, report generator (`eval/reports/<date>.md`); dry runs are labeled
+"TEST RUN — not a result". 41 tests with a fake engine and invented sample data.
+
+**Not verified — no SciCoQA numbers exist**: the real dataset format was never seen (github.com blocked
+here). The adapter's field aliases are a guess; run `portolan eval --inspect <path>` on the real download
+first. The matcher is ours, not the benchmark's. Repos are indexed at default-branch HEAD (no commit
+pinning).
+
+**Integration run (all of M5–M10)**: backend ruff, format, pyright strict, 663 tests; frontend lint,
+typecheck, 185 tests, build (first-load JS 81 KB gzipped); 21 Playwright specs in one run.
+
+**Next: M11 — Polish and release.**
