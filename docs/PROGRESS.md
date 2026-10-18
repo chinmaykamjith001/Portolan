@@ -268,3 +268,40 @@ pinning).
 typecheck, 185 tests, build (first-load JS 81 KB gzipped); 21 Playwright specs in one run.
 
 **Next: M11 — Polish and release.**
+
+## M11 — Polish and release ✅ (2026-10-18)
+
+**Done / verified**
+- Keyboard: `?` shortcut help, `/` concept search over loaded layers (no requests), Esc order
+  dialog → findings → popover → drawer → back; shortcuts off while typing or in a dialog.
+- Settings dialog (provider, model roles, limits, sandbox, theme, free-tier privacy notice, key
+  instructions) backed by `GET /api/settings`, which never returns a key (a test sets fake keys and
+  asserts they never appear in any settings/health/budget response).
+- Dark mode (manual, system, override) checked in a browser; accessibility pass (names, roles, live
+  regions, focus-visible, `aria-current`, skip link) with our own `a11y` test over every view.
+- Performance, production build in this headless software-rendered container: first paint median
+  144 ms (budget 1.5 s), click → drawer 7–20 ms (100 ms), layout shift 0.0014, first-load JS 83.8 KB
+  gzipped (400 KB), 300-node pan 59.9 fps.
+- One-process serving (`portolan serve` serves `frontend/dist`), `Dockerfile` + `docker-compose.yml`,
+  README rewrite, CONTRIBUTING, CI docker job.
+- Fresh-copy quickstart run in mock mode: `make setup` → `doctor` → `seed-demo` → `make dev` → health,
+  Vite page, chart through the proxy; and a production `serve` with SPA fallback.
+- **Final gate**: backend ruff, format, pyright strict, 672 tests; frontend lint, typecheck, 262 tests,
+  build, size budget; 38 Playwright specs in one run.
+
+**Not verified (be honest with yourself before relying on it)**
+- **No real end-to-end run.** arXiv, GitHub and OpenReview were blocked in the build environment; paper
+  fetching, repo cloning, real Gemini generation for Route/verify/FAQ/details, and OpenReview/GitHub
+  response shapes were only exercised through mocks and the M4 recordings.
+- **The Docker image has never been built** (no daemon here).
+- **SciCoQA**: no numbers exist; the dataset format is a documented guess (`portolan eval --inspect`).
+- **Windows**: sandbox isolation is weaker there (timeout and static checks only).
+- Accessibility was checked with our own rules, not axe or a screen reader.
+
+**To do on your machine (owner)**
+1. Quickstart in the README with your key; paste LoRA or Attention (their Chart is already recorded).
+2. Record the rest (≈ 60–70 requests per paper in total, within one day of the free key):
+   `make record ARGS="--paper 2106.09685 --steps explain,ground,example,graph,route,verify,faq --yes"`
+   and the same for `1706.03762` (see CONTRIBUTING.md for per-step costs).
+3. `pytest -m network` (ingest, repos, FAQ sources) to confirm the external shapes.
+4. `make eval ARGS="--data <scicoqa clone> --limit 25"` after checking `portolan eval --inspect`.

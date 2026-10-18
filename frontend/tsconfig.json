@@ -17,5 +17,5 @@
   },
   "include": ["src", "tests", "e2e/perf-entry.tsx"],
   // Node-side files (configs, e2e specs, the style scan) use tsconfig.node.json.
-  "exclude": ["tests/style.test.ts"]
+  "exclude": ["tests/style.test.ts", "tests/contrast.test.ts", "tests/focus.test.ts"]
 }

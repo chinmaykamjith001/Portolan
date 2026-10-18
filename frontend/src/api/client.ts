@@ -16,6 +16,7 @@ import type {
   GraphResult,
   LayerPayload,
   PaperInfo,
+  Settings,
   Route,
   Angle,
 } from "./types";
@@ -89,6 +90,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ question }),
     }),
+  settings: () => request<Settings>("/settings"),
+  health: () => request<{ status: string }>("/health"),
   budget: () => request<Budget>("/budget"),
 };
 
@@ -110,4 +113,6 @@ export const keys = {
   findings: (p: string) => ["findings", p] as const,
   faq: (p: string) => ["faq", p] as const,
   budget: () => ["budget"] as const,
+  settings: () => ["settings"] as const,
+  health: () => ["health"] as const,
 };

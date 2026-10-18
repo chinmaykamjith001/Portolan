@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { api, eventsUrl, keys, type Maybe } from "./client";
+import { ApiError, api, eventsUrl, keys, type Maybe } from "./client";
 import type { Angle, ProgressEvent } from "./types";
 
 const PENDING_RETRY_MS = 8000; // fallback if an SSE event is missed (e.g. after a reconnect)
@@ -128,6 +128,35 @@ export function useBudget() {
     queryKey: keys.budget(),
     queryFn: async () => unwrap(await api.budget()),
     refetchInterval: 30_000,
+  });
+}
+
+/** The Settings dialog's data. An older backend without the endpoint resolves to `null`, and the
+ * dialog falls back to what /api/budget reports. */
+export function useSettings(enabled = true) {
+  return useQuery({
+    queryKey: keys.settings(),
+    queryFn: async () => {
+      try {
+        return unwrap(await api.settings());
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+    },
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/** Is the backend up? Drives the first-run "start it with make dev" sentence. */
+export function useHealth() {
+  return useQuery({
+    queryKey: keys.health(),
+    queryFn: async () => unwrap(await api.health()),
+    retry: false,
+    refetchInterval: (q) => (q.state.status === "error" ? 5000 : false),
   });
 }
 

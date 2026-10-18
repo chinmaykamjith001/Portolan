@@ -63,8 +63,14 @@ export function PaperStrip({ paper, live }: { paper: PaperInfo | null | undefine
           ]}
         />
         <Progress live={live} paper={paper} />
-        {waiting && <span className={styles.notice}>Waiting for the free-tier rate limit (~{seconds} s)</span>}
-        {live.lastError && <span className={styles.notice}>{live.lastError}</span>}
+        {/* Always in the page, so a screen reader announces the text when it appears. They are the
+            last items in the row: empty, they take no visible space. */}
+        <span className={styles.notice} role="status">
+          {waiting ? `Waiting for the free-tier rate limit (~${seconds} s)` : ""}
+        </span>
+        <span className={styles.notice} role="alert">
+          {live.lastError ?? ""}
+        </span>
       </div>
     </section>
   );

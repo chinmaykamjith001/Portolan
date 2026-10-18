@@ -5,6 +5,7 @@ import { memo } from "react";
 
 import type { Concept, Grounding } from "../api/types";
 import { GROUNDING_LABEL } from "../design/GroundingGlyph";
+import { useAriaCurrent } from "../design/ariaCurrent";
 import { Shimmer } from "../design/primitives";
 import { useUI } from "../state/store";
 import styles from "./chart.module.css";
@@ -81,6 +82,7 @@ export function describeConcept(c: Concept, center: boolean, jumpable: boolean):
 
 function ConceptNodeImpl({ id, data }: NodeProps<ConceptNodeType>) {
   const selected = useUI((s) => s.selectedId === id);
+  const rootRef = useAriaCurrent<HTMLDivElement>(selected);
   const { concept: c, center, size, childCount, enterDelay } = data;
   const issuesInside = Math.max(data.issuesInside, c.issues_inside ?? 0);
   const jumpable = canJumpInto(c, center);
@@ -102,6 +104,7 @@ function ConceptNodeImpl({ id, data }: NodeProps<ConceptNodeType>) {
 
   return (
     <div
+      ref={rootRef}
       className={cls}
       style={{ width: size, height: size, animationDelay: enterDelay !== null ? `${enterDelay}ms` : undefined }}
       data-grounding={c.grounding}

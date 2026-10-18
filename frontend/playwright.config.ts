@@ -12,6 +12,10 @@ import { defineConfig, devices } from "@playwright/test";
 
 const API_PORT = Number(process.env.PW_API_PORT ?? 8765); // override to run two suites at once
 const WEB_PORT = Number(process.env.PW_WEB_PORT ?? 5174);
+// The production build, served by `vite preview`: e2e/polish.spec.ts measures budgets on it.
+// PW_NO_PREVIEW=1 skips the build (and those measurements) for quick runs.
+const PREVIEW_PORT = Number(process.env.PW_PREVIEW_PORT ?? 4174);
+const PREVIEW = process.env.PW_NO_PREVIEW !== "1";
 
 // One data dir per run. Workers inherit the env, so they don't create their own.
 process.env.PORTOLAN_E2E_HOME ??= mkdtempSync(join(tmpdir(), "portolan-e2e-"));
@@ -64,5 +68,17 @@ export default defineConfig({
       timeout: 120_000,
       env: { PORTOLAN_API_URL: `http://127.0.0.1:${API_PORT}` },
     },
+    ...(PREVIEW
+      ? [
+          {
+            // Not `pnpm build`: the type checks already ran, and dist/ is left alone.
+            command: `pnpm exec vite build --outDir dist-e2e --emptyOutDir && pnpm exec vite preview --outDir dist-e2e --port ${PREVIEW_PORT} --strictPort`,
+            url: `http://127.0.0.1:${PREVIEW_PORT}`,
+            reuseExistingServer: false,
+            timeout: 240_000,
+            env: { PORTOLAN_API_URL: `http://127.0.0.1:${API_PORT}` },
+          },
+        ]
+      : []),
   ],
 });

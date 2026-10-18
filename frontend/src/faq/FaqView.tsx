@@ -48,7 +48,7 @@ export default function FaqView() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || typing(e.target) || useUI.getState().dialog) return;
       e.preventDefault();
       input.current?.focus();
     };

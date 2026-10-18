@@ -339,3 +339,17 @@ _None yet._
 - **Not done:** paper-page discussions (the spec's optional source 3); `record --steps faq` can only
   capture reviewer and issue answers on a machine that can reach those sites.
 
+
+## M11 — design token contrast fixes (needs owner OK)
+
+A contrast test (`frontend/tests/contrast.test.ts`) computes WCAG ratios for the token pairs in
+`tokens.css` in both themes. Three pairs in PORTOLAN_SPEC.md §14.1 fall short of the 4.5:1 the spec
+itself requires (§13.12), so the values were adjusted slightly:
+
+| Token | Spec value | Now | Ratio before → after |
+|---|---|---|---|
+| light `--ink-3` | `#77746C` | `#726F68` | 4.28 → 4.60 on `--bg` |
+| light `--mismatch` | `#B8432F` | `#B03E2B` | 4.37 → 4.75 on `--mismatch-soft` |
+| `--code-dim` | `#8B8E96` | `#9194A0` | 4.36 → 4.73 on highlighted code lines |
+
+The spec file itself was not edited (it wins over everything else); update §14.1 if you agree.

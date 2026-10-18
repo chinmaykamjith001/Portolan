@@ -37,3 +37,5 @@ eval/runs/
 Thumbs.db
 .vscode/
 .idea/
+
+frontend/dist-e2e/

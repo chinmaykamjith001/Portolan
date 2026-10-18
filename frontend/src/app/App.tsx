@@ -2,11 +2,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import { api } from "../api/client";
-import { usePaper, usePaperEvents } from "../api/hooks";
+import { useHealth, usePaper, usePaperEvents } from "../api/hooks";
 import type { TitleCandidate } from "../api/types";
 import { DetailDrawer } from "../detail/DetailDrawer";
 import { FindingsPanel } from "../findings/FindingsPanel";
 import { useUI } from "../state/store";
+import { ConceptSearch } from "./ConceptSearch";
+import dialogStyles from "./dialogs.module.css";
+import { useGlobalShortcuts } from "./keys";
+import { SERVER_DOWN } from "./messages";
+import { SettingsDialog } from "./SettingsDialog";
+import { ShortcutHelp } from "./ShortcutHelp";
 import { PaperStrip } from "./PaperStrip";
 import styles from "./shell.module.css";
 import { TopBar, type Theme } from "./TopBar";
@@ -63,9 +69,10 @@ function useUrlSync() {
   }, [paperId]);
 }
 
-function Empty({ open }: { open: (input: string) => void }) {
+function Empty({ open, serverDown }: { open: (input: string) => void; serverDown: boolean }) {
   return (
     <div className={styles.empty}>
+      {serverDown && <p role="alert">{SERVER_DOWN}</p>}
       <p>Paste a paper to map its ideas, follow it in the order it was written, and see where each idea lives in the code.</p>
       <ul>
         {EXAMPLES.map((e) => (
@@ -102,11 +109,14 @@ function Candidates({ items, pick }: { items: TitleCandidate[]; pick: (c: TitleC
 
 function Shell() {
   useUrlSync();
+  useGlobalShortcuts();
   const [theme, setTheme] = useTheme();
   const paperId = useUI((s) => s.paperId);
   const view = useUI((s) => s.view);
   const setPaper = useUI((s) => s.setPaper);
   const escape = useUI((s) => s.escape);
+  const dialog = useUI((s) => s.dialog);
+  const health = useHealth();
   const [candidates, setCandidates] = useState<TitleCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const live = usePaperEvents(paperId);
@@ -126,16 +136,30 @@ function Shell() {
       const res = await api.createPaper(input);
       if (!res.pending && "paper_id" in res.data) setPaper(res.data.paper_id);
     } catch {
-      setError("Couldn't reach the Portolan server. Is it running?");
+      setError(SERVER_DOWN);
     }
   }
 
   return (
     <div className={styles.app}>
-      <TopBar onCandidates={setCandidates} onError={setError} theme={theme} setTheme={setTheme} />
+      <a
+        className={dialogStyles.skip}
+        href="#main"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("main")?.focus();
+        }}
+      >
+        Skip to content
+      </a>
+      <TopBar onCandidates={setCandidates} onError={setError} />
       {paperId && <PaperStrip paper={paper} live={live} />}
-      <main className={styles.main}>
-        {error && <p className={styles.message}>{error}</p>}
+      <main id="main" tabIndex={-1} className={styles.main}>
+        {error && (
+          <p className={styles.message} role="alert">
+            {error}
+          </p>
+        )}
         {!error && candidates.length > 0 && (
           <Candidates
             items={candidates}
@@ -145,7 +169,7 @@ function Shell() {
             }}
           />
         )}
-        {!error && candidates.length === 0 && !paperId && <Empty open={(i) => void open(i)} />}
+        {!error && candidates.length === 0 && !paperId && <Empty open={(i) => void open(i)} serverDown={health.isError} />}
         {paperId && view === "chart" && (
           <Suspense fallback={null}>
             <ChartView />
@@ -163,6 +187,9 @@ function Shell() {
         )}
         {paperId && <FindingsPanel />}
         {paperId && <DetailDrawer />}
+        {dialog === "settings" && <SettingsDialog theme={theme} setTheme={setTheme} />}
+        {dialog === "help" && <ShortcutHelp />}
+        {dialog === "search" && paperId && <ConceptSearch />}
       </main>
     </div>
   );

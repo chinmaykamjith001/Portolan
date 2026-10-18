@@ -5,8 +5,9 @@ import { useBudget } from "../api/hooks";
 import type { CreatePaperResult, TitleCandidate } from "../api/types";
 import type { Maybe } from "../api/client";
 import { Logo } from "../design/Logo";
-import { Button, Popover } from "../design/primitives";
+import { Button } from "../design/primitives";
 import { useUI } from "../state/store";
+import { SERVER_DOWN } from "./messages";
 import styles from "./shell.module.css";
 
 export type Theme = "system" | "light" | "dark";
@@ -24,19 +25,14 @@ function Budget() {
 export function TopBar({
   onCandidates,
   onError,
-  theme,
-  setTheme,
 }: {
   onCandidates: (c: TitleCandidate[]) => void;
   onError: (message: string | null) => void;
-  theme: Theme;
-  setTheme: (t: Theme) => void;
 }) {
   const setPaper = useUI((s) => s.setPaper);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
-  const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
-  const { data: budget } = useBudget();
+  const openDialog = useUI((s) => s.openDialog);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -52,7 +48,7 @@ export function TopBar({
         setPaper(res.data.paper_id);
       }
     } catch (err) {
-      onError(err instanceof ApiError ? err.message : "Couldn't reach the Portolan server. Is it running?");
+      onError(err instanceof ApiError ? err.message : SERVER_DOWN);
     } finally {
       setBusy(false);
     }
@@ -124,32 +120,9 @@ export function TopBar({
       </form>
       <span className={styles.spacer} />
       <Budget />
-      <Button
-        quiet
-        aria-label="Settings"
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          setSettings(settings ? null : { x: Math.max(16, r.right - 340), y: r.bottom + 8 });
-        }}
-      >
+      <Button quiet onClick={() => openDialog("settings")}>
         Settings
       </Button>
-      {settings && (
-        <Popover x={settings.x} y={settings.y} onClose={() => setSettings(null)} label="Settings">
-          <div className={styles.settings}>
-            {budget?.provider === "gemini" && (
-              <p>Free Gemini keys may let Google use what you send. Don&apos;t analyze private code with a free key.</p>
-            )}
-            <p>Provider: {budget?.provider ?? "unknown"}</p>
-            <label htmlFor="theme">Theme</label>
-            <select id="theme" value={theme} onChange={(e) => setTheme(e.target.value as Theme)}>
-              <option value="system">Follow system</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </div>
-        </Popover>
-      )}
     </header>
   );
 }

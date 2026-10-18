@@ -20,6 +20,9 @@ export interface PendingFocus {
   view: "chart" | "route";
 }
 
+/** A modal dialog over the whole app. Shortcuts are off while one is open. */
+export type DialogName = "settings" | "help" | "search";
+
 export interface UIState {
   paperId: string | null;
   view: View;
@@ -32,6 +35,7 @@ export interface UIState {
   cameFrom: string | null;
   findingsOpen: boolean;
   pendingFocus: PendingFocus | null;
+  dialog: DialogName | null;
   /** Route view: stop ids jumped into, outermost first. [] means the main route. A sub-route's id
    * is the id of the stop it opens (spec §9.5), so this is also the list of route ids. */
   routePath: string[];
@@ -40,6 +44,8 @@ export interface UIState {
   /** The stop we just came back out of (selected after Back). */
   cameFromStop: string | null;
 
+  openDialog: (dialog: DialogName) => void;
+  closeDialog: () => void;
   setFindingsOpen: (open: boolean) => void;
   /** Switch to `view` and ask it to reveal `conceptId`; the view clears it when done. */
   focusConcept: (conceptId: string, view: "chart" | "route") => void;
@@ -76,10 +82,13 @@ export const useUI = create<UIState>((set, get) => ({
   cameFrom: null,
   findingsOpen: false,
   pendingFocus: null,
+  dialog: null,
   routePath: [],
   stopId: null,
   cameFromStop: null,
 
+  openDialog: (dialog) => set({ dialog }),
+  closeDialog: () => set({ dialog: null }),
   selectStop: (stop, openDrawer = true) =>
     set({
       stopId: stop?.id ?? null,
@@ -153,7 +162,8 @@ export const useUI = create<UIState>((set, get) => ({
   closeEdge: () => set({ edge: null }),
   escape: () => {
     const s = get();
-    if (s.findingsOpen) set({ findingsOpen: false });
+    if (s.dialog) set({ dialog: null });
+    else if (s.findingsOpen) set({ findingsOpen: false });
     else if (s.edge) set({ edge: null });
     else if (s.drawerOpen) set({ drawerOpen: false });
     else if (s.view === "route") s.routeBack();

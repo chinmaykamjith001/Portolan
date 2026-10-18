@@ -401,7 +401,7 @@ function Scene({ paperId, routeId, route, concepts = {}, status, emptyText, reve
   // Keyboard (spec §13.10). Esc is global (App.tsx → store.escape).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || useUI.getState().dialog) return;
       const el = document.activeElement;
       if (isTyping(el)) return;
       const onBody = el === null || el === document.body;

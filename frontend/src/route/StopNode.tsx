@@ -7,6 +7,7 @@ import { memo, type MouseEvent } from "react";
 import type { Concept, Stop } from "../api/types";
 import { anchorLabel } from "../detail/anchors";
 import { GROUNDING_LABEL, GroundingGlyph } from "../design/GroundingGlyph";
+import { useAriaCurrent } from "../design/ariaCurrent";
 import { useUI } from "../state/store";
 import styles from "./route.module.css";
 
@@ -35,6 +36,7 @@ export function describeStop(d: StopNodeData): string {
 
 function StopNodeImpl({ id, data }: NodeProps<StopNodeType>) {
   const current = useUI((s) => s.stopId === id);
+  const rootRef = useAriaCurrent<HTMLDivElement>(current);
   const { stop, number, concept, subCount, recurrence, enterDelay } = data;
   const mismatch = (concept?.issue_count_self ?? 0) > 0;
   const cls = [
@@ -51,6 +53,7 @@ function StopNodeImpl({ id, data }: NodeProps<StopNodeType>) {
 
   return (
     <div
+      ref={rootRef}
       className={cls}
       style={{ animationDelay: enterDelay !== null ? `${enterDelay}ms` : undefined }}
       data-state={[current ? "current" : "", mismatch ? "mismatch" : ""].filter(Boolean).join(" ") || "default"}

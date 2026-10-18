@@ -279,3 +279,14 @@ export interface FAQItem {
 export interface FaqPayload {
   items: FAQItem[];
 }
+
+/** GET /api/settings: what Settings shows. Never contains keys. */
+export interface Settings {
+  version: string;
+  provider: "gemini" | "ollama" | "mock";
+  models: { fast: string; default: string; strong: string };
+  limits: { rpm: number; rpd: number; tpm: number };
+  free_tier_notice: boolean;
+  sandbox_mode: "process" | "docker";
+  repo_linked?: boolean;
+}

@@ -32,7 +32,9 @@
 }
 
 .canvas :global(.react-flow__node:focus-visible) {
-  outline: none;
+  /* Keyboard focus must be visible on its own, not only through the selection ring (§13.12). */
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .empty {
