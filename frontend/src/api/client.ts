@@ -4,10 +4,13 @@
 import type {
   ApiErrorBody,
   Budget,
+  CodeGrounding,
   ConceptPayload,
   CreatePaperResult,
   EdgeExplanation,
+  Example,
   Explanation,
+  GraphResult,
   LayerPayload,
   PaperInfo,
   Angle,
@@ -66,6 +69,12 @@ export const api = {
     ),
   edge: (paperId: string, linkId: string) =>
     request<EdgeExplanation>(`/papers/${enc(paperId)}/links/${enc(linkId)}/explanation`),
+  code: (paperId: string, conceptId: string) =>
+    request<CodeGrounding>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/code`),
+  example: (paperId: string, conceptId: string, variant = 0) =>
+    request<Example>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/example?variant=${variant}`),
+  graph: (paperId: string, conceptId: string) =>
+    request<GraphResult>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/graph`),
   budget: () => request<Budget>("/budget"),
 };
 
@@ -80,5 +89,8 @@ export const keys = {
   concept: (p: string, c: string) => ["concept", p, c] as const,
   explanation: (p: string, c: string, angle: Angle) => ["explanation", p, c, angle] as const,
   edge: (p: string, linkId: string) => ["edge", p, linkId] as const,
+  code: (p: string, c: string) => ["code", p, c] as const,
+  example: (p: string, c: string, variant: number) => ["example", p, c, variant] as const,
+  graph: (p: string, c: string) => ["graph", p, c] as const,
   budget: () => ["budget"] as const,
 };

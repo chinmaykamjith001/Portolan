@@ -16,7 +16,10 @@ from typing import Any
 
 from portolan.chart.master import ChartBuilder
 from portolan.config import Config
+from portolan.detail.example import make_example
 from portolan.detail.explain import explain, explain_edge
+from portolan.detail.graph import make_graph
+from portolan.detail.ground import ground_code
 from portolan.ingest.http import PoliteClient
 from portolan.ingest.pipeline import ingest_ref, parse_upload
 from portolan.llm.gateway import Gateway
@@ -85,6 +88,9 @@ class Services:
             "skeleton": self._skeleton,
             "explain": self._explain,
             "edge": self._edge,
+            "ground": self._ground,
+            "example": self._example,
+            "graph": self._graph,
         }
         for kind, handler in handlers.items():
             self.queue.register(kind, _with_paper(handler))
@@ -190,6 +196,41 @@ class Services:
         link_id = str(job.payload["link_id"])
         self.details.save_edge(paper_id, await explain_edge(doc, self.gateway, self.chart, link_id))
         self.bus.publish(paper_id, "detail_ready", {"link_id": link_id, "part": "edge"})
+
+    async def _ground(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        doc = self.paper(paper_id)
+        if doc is None:
+            return
+        concept_id = str(job.payload["concept_id"])
+        grounding = await ground_code(doc, self.gateway, self.chart, self.db, concept_id)
+        self.details.save_grounding(paper_id, grounding)
+        self.bus.publish(paper_id, "detail_ready", {"concept_id": concept_id, "part": "code"})
+
+    async def _example(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        doc = self.paper(paper_id)
+        if doc is None:
+            return
+        concept_id, variant = str(job.payload["concept_id"]), int(job.payload.get("variant", 0))
+        previous = [e for e in self.details.examples(paper_id, concept_id) if e.variant < variant]
+        example = await make_example(doc, self.gateway, self.chart, concept_id, variant, previous)
+        self.details.save_example(paper_id, example)
+        self.bus.publish(
+            paper_id,
+            "detail_ready",
+            {"concept_id": concept_id, "part": "example", "variant": variant},
+        )
+
+    async def _graph(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        doc = self.paper(paper_id)
+        if doc is None:
+            return
+        concept_id = str(job.payload["concept_id"])
+        spec = await make_graph(doc, self.gateway, self.chart, concept_id)
+        self.details.save_graph(paper_id, concept_id, spec)
+        self.bus.publish(paper_id, "detail_ready", {"concept_id": concept_id, "part": "graph"})
 
     def job_states(self, paper_id: str) -> dict[str, str]:
         states: dict[str, str] = {}

@@ -65,6 +65,36 @@ export function useEdge(paperId: string | null, linkId: string | null) {
   });
 }
 
+export function useCode(paperId: string | null, conceptId: string | null) {
+  return useQuery({
+    queryKey: keys.code(paperId ?? "", conceptId ?? ""),
+    queryFn: async () => unwrap(await api.code(paperId ?? "", conceptId ?? "")),
+    enabled: paperId !== null && conceptId !== null,
+    staleTime: Infinity,
+    refetchInterval: (q) => pendingRefetch(q.state.data),
+  });
+}
+
+export function useExample(paperId: string | null, conceptId: string | null, variant: number) {
+  return useQuery({
+    queryKey: keys.example(paperId ?? "", conceptId ?? "", variant),
+    queryFn: async () => unwrap(await api.example(paperId ?? "", conceptId ?? "", variant)),
+    enabled: paperId !== null && conceptId !== null,
+    staleTime: Infinity,
+    refetchInterval: (q) => pendingRefetch(q.state.data),
+  });
+}
+
+export function useGraph(paperId: string | null, conceptId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: keys.graph(paperId ?? "", conceptId ?? ""),
+    queryFn: async () => unwrap(await api.graph(paperId ?? "", conceptId ?? "")),
+    enabled: enabled && paperId !== null && conceptId !== null,
+    staleTime: Infinity,
+    refetchInterval: (q) => pendingRefetch(q.state.data),
+  });
+}
+
 export function useBudget() {
   return useQuery({
     queryKey: keys.budget(),
@@ -111,6 +141,9 @@ export function usePaperEvents(paperId: string | null): LiveState {
       const data = parse(e as MessageEvent<string>);
       if (data.part === "edge") {
         void qc.invalidateQueries({ queryKey: keys.edge(paperId, String(data.link_id)) });
+      } else if (data.part === "code" || data.part === "example" || data.part === "graph") {
+        void qc.invalidateQueries({ queryKey: [data.part, paperId, String(data.concept_id)] });
+        void qc.invalidateQueries({ queryKey: keys.concept(paperId, String(data.concept_id)) });
       } else {
         void qc.invalidateQueries({ queryKey: ["explanation", paperId, String(data.concept_id)] });
         void qc.invalidateQueries({ queryKey: keys.concept(paperId, String(data.concept_id)) });

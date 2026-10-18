@@ -150,3 +150,57 @@ export interface ProgressEvent {
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
+
+export interface CodeSpan {
+  repo_id: string;
+  commit_sha: string;
+  path: string;
+  start_line: number;
+  end_line: number;
+}
+
+export type NoteKind = "implements" | "detail_not_in_paper" | "mismatch" | "context";
+
+export interface LineNote {
+  line: number;
+  tag: string;
+  note: string;
+  kind: NoteKind;
+}
+
+export interface CodeGrounding {
+  concept_id: string;
+  grounding: Grounding;
+  spans: CodeSpan[];
+  notes: LineNote[];
+  library_calls: string[];
+  summary: string;
+  /** {path: {line number: text}} for every line of every span. */
+  code: Record<string, Record<string, string>>;
+  /** path -> URL of the file at the commit */
+  links: Record<string, string>;
+}
+
+export interface Example {
+  concept_id: string;
+  variant: number;
+  source_label: "generic" | "paper_notation" | "from_repo_run";
+  caption: string;
+  program: string;
+  columns: string[];
+  rows: string[][];
+  note: string | null;
+}
+
+export type GraphTemplate = "bar" | "line" | "heatmap" | "before_after" | "distribution";
+
+export interface GraphSpec {
+  concept_id: string;
+  template: GraphTemplate;
+  caption: string;
+  /** Computed by the sandbox. Shape per template: see src/detail/graphs. */
+  data: Record<string, unknown>;
+  note: string | null;
+}
+
+export type GraphResult = GraphSpec | { template: "none" };

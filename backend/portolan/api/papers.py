@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -264,9 +264,9 @@ def concept(paper_id: str, concept_id: str, request: Request) -> JSONResponse:
             "issues_inside": inside,
             "details": {
                 "explanation": svc.details.explanation(paper_id, concept_id, "default") is not None,
-                "code": False,
-                "example": False,
-                "graph": False,
+                "code": svc.details.grounding(paper_id, concept_id) is not None,
+                "example": svc.details.example(paper_id, concept_id, 0) is not None,
+                "graph": svc.details.graph(paper_id, concept_id)[1] is not None,
             },
         }
     )
@@ -313,3 +313,77 @@ def edge_explanation(paper_id: str, link_id: str, request: Request) -> JSONRespo
         priority="P0", paper_id=paper_id,
     )  # fmt: skip
     return JSONResponse({"status": "generating"}, status_code=202)
+
+
+def _concept_or_404(svc: Services, paper_id: str, concept_id: str) -> JSONResponse | None:
+    if svc.chart.get_concept(paper_id, concept_id) is None:
+        return error(404, "not_found", "That concept isn't on this paper's map.")
+    return None
+
+
+def _generating(
+    svc: Services,
+    paper_id: str,
+    kind: str,
+    key: str,
+    payload: dict[str, Any],
+    priority: Literal["P0", "P1"] = "P0",
+) -> JSONResponse:
+    svc.queue.submit(kind, key, payload, priority=priority, paper_id=paper_id)
+    job = svc.queue.get(key)
+    if job is not None and job.state == "failed":
+        return error(502, "generation_failed", "Couldn't write this part. Try again.")
+    return JSONResponse({"status": "generating"}, status_code=202)
+
+
+@router.get("/papers/{paper_id}/concepts/{concept_id}/code")
+def concept_code(paper_id: str, concept_id: str, request: Request) -> JSONResponse:
+    svc = services(request)
+    if (missing := _concept_or_404(svc, paper_id, concept_id)) is not None:
+        return missing
+    stored = svc.details.grounding(paper_id, concept_id)
+    if stored is not None:
+        return JSONResponse(stored.model_dump(mode="json"))
+    return _generating(
+        svc, paper_id, "ground", f"ground:{paper_id}:{concept_id}", {"concept_id": concept_id}
+    )
+
+
+@router.get("/papers/{paper_id}/concepts/{concept_id}/example")
+def concept_example(
+    paper_id: str, concept_id: str, request: Request, variant: int = 0
+) -> JSONResponse:
+    svc = services(request)
+    if (missing := _concept_or_404(svc, paper_id, concept_id)) is not None:
+        return missing
+    if variant < 0 or variant > 8:
+        return error(400, "bad_variant", "Ask for example 0 to 8.")
+    stored = svc.details.example(paper_id, concept_id, variant)
+    if stored is not None:
+        return JSONResponse(stored.model_dump(mode="json"))
+    return _generating(
+        svc,
+        paper_id,
+        "example",
+        f"example:{paper_id}:{concept_id}:{variant}",
+        {"concept_id": concept_id, "variant": variant},
+    )
+
+
+@router.get("/papers/{paper_id}/concepts/{concept_id}/graph")
+def concept_graph(paper_id: str, concept_id: str, request: Request) -> JSONResponse:
+    svc = services(request)
+    if (missing := _concept_or_404(svc, paper_id, concept_id)) is not None:
+        return missing
+    generated, spec = svc.details.graph(paper_id, concept_id)
+    if generated:
+        return JSONResponse(spec.model_dump(mode="json") if spec else {"template": "none"})
+    # Nobody is waiting on a graph (the tab appears only when one exists), so it yields to P0 work.
+    return _generating(
+        svc,
+        paper_id,
+        "graph",
+        f"graph:{paper_id}:{concept_id}",
+        {"concept_id": concept_id},
+        priority="P1",
+    )

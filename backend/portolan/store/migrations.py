@@ -227,4 +227,35 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        7,
+        "code groundings, examples and graphs",
+        """
+        CREATE TABLE code_groundings (
+            paper_id TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            grounding_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (paper_id, concept_id)
+        );
+
+        CREATE TABLE examples (
+            paper_id TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            variant INTEGER NOT NULL,
+            example_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (paper_id, concept_id, variant)
+        );
+
+        -- graph_json is 'null' when the model judged that no visual would help.
+        CREATE TABLE graphs (
+            paper_id TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            graph_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (paper_id, concept_id)
+        );
+        """,
+    ),
 ]

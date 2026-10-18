@@ -182,3 +182,10 @@ roll-up; the builder, record CLI, API and recording done here.
 - Clicks during the ~600 ms jump animation are ignored.
 
 **Next: M6 — Node details.**
+
+## M6 — Node details (in progress)
+
+**Plan**: contracts first (models, migration 7, store, job handlers, routes, frontend types/hooks —
+committed), then four parallel pieces: sandbox + security tests; code grounding (prompt, validation,
+endpoint); examples + graph templates (prompts, sandbox use); frontend Code / Example / Graph tabs with
+arrow callouts and an in-house SVG graph renderer.
