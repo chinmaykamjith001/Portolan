@@ -10,8 +10,8 @@ import { join } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
-const API_PORT = 8765;
-const WEB_PORT = 5174;
+const API_PORT = Number(process.env.PW_API_PORT ?? 8765); // override to run two suites at once
+const WEB_PORT = Number(process.env.PW_WEB_PORT ?? 5174);
 
 // One data dir per run. Workers inherit the env, so they don't create their own.
 process.env.PORTOLAN_E2E_HOME ??= mkdtempSync(join(tmpdir(), "portolan-e2e-"));
