@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
 from starlette.datastructures import UploadFile
 
-from portolan.api.services import Services, describe_concepts
+from portolan.api.services import Services, describe_concepts, findings_index
 from portolan.chart.issues import issues_inside
 from portolan.ingest.arxiv import fetch_metadata
 from portolan.ingest.http import FetchError
@@ -254,9 +254,10 @@ def concept(paper_id: str, concept_id: str, request: Request) -> JSONResponse:
     c = svc.chart.get_concept(paper_id, concept_id)
     if c is None:
         return error(404, "not_found", "That concept isn't on this paper's map.")
+    attached = findings_index(svc, paper_id)
     inside = issues_inside(
-        lambda cid: svc.chart.children(paper_id, cid), lambda _cid: [], concept_id
-    )  # findings arrive in M8
+        lambda cid: svc.chart.children(paper_id, cid), lambda cid: attached.get(cid, ()), concept_id
+    )
     return JSONResponse(
         {
             "concept": c.model_dump(mode="json"),

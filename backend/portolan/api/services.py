@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from portolan.chart.issues import issues_inside
 from portolan.chart.master import ChartBuilder
 from portolan.code.ensure import ensure_index
 from portolan.config import Config
@@ -35,10 +36,12 @@ from portolan.route.build import build_main_route, build_sub_route
 from portolan.store.chart import ChartStore
 from portolan.store.db import Database
 from portolan.store.details import DetailStore
+from portolan.store.findings import FindingStore
 from portolan.store.papers import load_paper, save_paper
 from portolan.store.repos import choose_repo, chosen_repo, save_candidates
 from portolan.store.routes import RouteStore
 from portolan.verify.engine import verify_paper
+from portolan.verify.issues import findings_by_concept
 
 # The paper whose job is running in this task, so gateway events (rate limits) reach its SSE stream.
 current_paper: ContextVar[str | None] = ContextVar("current_paper", default=None)
@@ -322,6 +325,22 @@ class Services:
         return states
 
 
+def findings_index(services: Services, paper_id: str) -> dict[str, set[str]]:
+    """concept id -> ids of the confident mismatches attached to it (the map's issue badges)."""
+    threshold = services.config.generation.mismatch_confidence_threshold
+    return findings_by_concept(FindingStore(services.db).all(paper_id), threshold)
+
+
 def describe_concepts(services: Services, paper_id: str, ids: list[str]) -> dict[str, Any]:
     concepts = services.chart.concepts(paper_id, ids)
-    return {cid: c.model_dump(mode="json") for cid, c in concepts.items()}
+    attached = findings_index(services, paper_id)
+    out: dict[str, Any] = {}
+    for cid, c in concepts.items():
+        out[cid] = c.model_dump(mode="json") | {
+            "issues_inside": issues_inside(
+                lambda x: services.chart.children(paper_id, x),
+                lambda x: attached.get(x, ()),
+                cid,
+            )
+        }
+    return out
