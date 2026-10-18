@@ -149,3 +149,20 @@ roll-up; the builder, record CLI, API and recording done here.
 - A few orphaned skeleton fixtures remain from the discarded first Attention run (harmless).
 
 **Next: M5 — Frontend shell + Chart view.**
+
+## M5 — Frontend shell + Chart view (in progress)
+
+**Plan**
+- Backend (done, efc0bba): default + angle explanations, edge explanations, rate-limit events on the
+  paper's SSE stream, `portolan schema`.
+- Contracts + shell (done): API types/client, TanStack Query hooks (202 = generating, SSE invalidation),
+  Zustand UI store, design primitives, top bar, paper strip, view switcher, empty/loading/error/
+  rate-limited states, theme setting, URL sync.
+- Chart view (`src/chart/`): React Flow canvas, ELK layout in a Web Worker (deterministic, cached per
+  layer), legend shapes, selection, breadcrumbs + Back, jump in/out animation with reduced-motion path,
+  edge double-click popover, hover prefetch, keyboard (Enter/Space, Tab, `f`).
+- Detail drawer (`src/detail/`): header (context, grounding, anchors, also-appears-in), Explain tab with
+  angles, small Markdown + KaTeX renderer, Jump in action.
+- PDF multipart upload (`POST /api/papers` with a file) + "Upload PDF" in the top bar.
+- Checks: forbidden-style test (no gradients/blur, token colors only), Playwright flow under the mock
+  provider, 300-node pan perf test, reduced-motion test.
