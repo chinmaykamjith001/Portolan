@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+from starlette.datastructures import UploadFile
 
 from portolan.api.services import Services, describe_concepts
 from portolan.chart.issues import issues_inside
 from portolan.ingest.arxiv import fetch_metadata
 from portolan.ingest.http import FetchError
+from portolan.ingest.pipeline import upload_paper_id
 from portolan.ingest.resolver import resolve
 from portolan.models.concept import MASTER
 from portolan.orchestrator.events import format_sse, heartbeat
@@ -36,7 +39,14 @@ class PaperIn(BaseModel):
 
 
 @router.post("/papers")
-async def create_paper(body: PaperIn, request: Request) -> JSONResponse:
+async def create_paper(request: Request) -> JSONResponse:
+    """`{input}` as JSON, or a PDF as multipart form data (field `file`)."""
+    if request.headers.get("content-type", "").startswith("multipart/form-data"):
+        return await _create_from_upload(request)
+    try:
+        body = PaperIn.model_validate(await request.json())
+    except (ValueError, ValidationError):
+        return error(422, "bad_request", "The request was missing something or malformed.")
     svc = services(request)
     try:
         result = await resolve(body.input, svc.http)
@@ -80,6 +90,46 @@ async def create_paper(body: PaperIn, request: Request) -> JSONResponse:
     svc.queue.submit(
         "ingest", f"ingest:{paper_id}",
         {"ref": ref.model_dump(mode="json"), "pdf_url": result.pdf_url},
+        priority="P0", paper_id=paper_id,
+    )  # fmt: skip
+    return JSONResponse({"paper_id": paper_id, "status": "queued"}, status_code=202)
+
+
+async def _create_from_upload(request: Request) -> JSONResponse:
+    svc = services(request)
+    cap = svc.config.storage.max_upload_mb * 1024 * 1024
+    try:
+        form = await request.form(max_files=1, max_fields=4)
+    except Exception:  # malformed multipart body
+        return error(400, "bad_upload", "Couldn't read the upload. Try choosing the PDF again.")
+    try:
+        upload = form.get("file")
+        if not isinstance(upload, UploadFile):
+            return error(400, "bad_upload", "Choose a PDF file to upload.")
+        data = await upload.read(cap + 1)
+        filename = Path(upload.filename or "upload.pdf").name[:200] or "upload.pdf"
+    finally:
+        await form.close()
+    if len(data) > cap:
+        return error(
+            413, "too_large",
+            f"That PDF is larger than {svc.config.storage.max_upload_mb} MB. Try a smaller file.",
+        )  # fmt: skip
+    if not data.startswith(b"%PDF"):
+        return error(400, "not_pdf", f"{filename} doesn't look like a PDF. Upload a PDF file.")
+
+    paper_id = upload_paper_id(data)
+    if svc.paper(paper_id) is not None:
+        svc.queue.submit(
+            "chart_master", f"chart_master:{paper_id}", priority="P0", paper_id=paper_id
+        )
+        return JSONResponse({"paper_id": paper_id, "status": "ready"})
+    folder = svc.config.storage.uploads_dir
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{paper_id.split(':', 1)[1]}.pdf"
+    await asyncio.to_thread(path.write_bytes, data)
+    svc.queue.submit(
+        "ingest", f"ingest:{paper_id}", {"upload_path": str(path), "filename": filename},
         priority="P0", paper_id=paper_id,
     )  # fmt: skip
     return JSONResponse({"paper_id": paper_id, "status": "queued"}, status_code=202)

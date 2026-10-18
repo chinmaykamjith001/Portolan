@@ -208,13 +208,17 @@ async def _arxiv(ref: PaperRef, client: PoliteClient) -> IngestReport:
     )
 
 
+def upload_paper_id(data: bytes) -> str:
+    """Uploaded PDFs are identified by content, so the same file maps to the same paper."""
+    return f"upload:{hashlib.sha256(data).hexdigest()[:16]}"
+
+
 def parse_upload(data: bytes, filename: str = "upload.pdf") -> PaperDoc:
     if data[:4] != b"%PDF":
         raise IngestError(f"{filename} doesn't look like a PDF. Upload a PDF file.")
-    digest = hashlib.sha256(data).hexdigest()[:16]
     return parse_pdf(
         data,
-        paper_id=f"upload:{digest}",
+        paper_id=upload_paper_id(data),
         ref=PaperRef(source_kind="upload", title=filename),
     )
 

@@ -443,6 +443,21 @@ def schema(out: str = typer.Option("", help="Write to this file instead of stdou
         typer.echo(text)
 
 
+@app.command("seed-demo")
+def seed_demo() -> None:
+    """Write a small demo paper and its map into the database (no network, no LLM)."""
+    from portolan.dev.seed import seed_demo as seed
+
+    config = load_config()
+    db = open_database(config.storage.db_path)
+    try:
+        paper_id = seed(db)
+    finally:
+        db.close()
+    typer.echo(f"Seeded {paper_id} into {config.storage.db_path}")
+    typer.echo(f"Open http://localhost:5173/?paper={paper_id}")
+
+
 RECORD_STEPS = ("master", "skeleton")
 
 

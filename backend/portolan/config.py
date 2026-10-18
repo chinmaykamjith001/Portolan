@@ -65,6 +65,7 @@ class SandboxConfig(BaseModel):
 
 class StorageConfig(BaseModel):
     home: Path = Path("~/.portolan")
+    max_upload_mb: int = 50  # PDF uploads through the API
 
     @property
     def home_dir(self) -> Path:
@@ -77,6 +78,10 @@ class StorageConfig(BaseModel):
     @property
     def workspace_dir(self) -> Path:
         return self.home_dir / "workspace"
+
+    @property
+    def uploads_dir(self) -> Path:
+        return self.home_dir / "uploads"
 
 
 class HttpConfig(BaseModel):

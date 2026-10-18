@@ -7,16 +7,18 @@ results land so the browser never polls.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from portolan.chart.master import ChartBuilder
 from portolan.config import Config
 from portolan.detail.explain import explain, explain_edge
 from portolan.ingest.http import PoliteClient
-from portolan.ingest.pipeline import ingest_ref
+from portolan.ingest.pipeline import ingest_ref, parse_upload
 from portolan.llm.gateway import Gateway
 from portolan.models.concept import MASTER
 from portolan.models.paper import PaperDoc, PaperRef
@@ -26,7 +28,7 @@ from portolan.repo.finder import RepoFinder
 from portolan.store.chart import ChartStore
 from portolan.store.db import Database
 from portolan.store.details import DetailStore
-from portolan.store.papers import load_paper
+from portolan.store.papers import load_paper, save_paper
 from portolan.store.repos import choose_repo, chosen_repo, save_candidates
 
 # The paper whose job is running in this task, so gateway events (rate limits) reach its SSE stream.
@@ -94,10 +96,15 @@ class Services:
 
     async def _ingest(self, job: Job) -> None:
         paper_id = str(job.paper_id)
-        ref = PaperRef.model_validate(job.payload["ref"])
         self.progress(paper_id, "reading", 5, "Reading paper")
-        report = await ingest_ref(ref, self.http, self.db, pdf_url=job.payload.get("pdf_url"))
-        doc = report.doc
+        if "upload_path" in job.payload:
+            data = await asyncio.to_thread(Path(job.payload["upload_path"]).read_bytes)
+            doc = await asyncio.to_thread(parse_upload, data, job.payload.get("filename", ""))
+            save_paper(self.db, doc)
+        else:
+            ref = PaperRef.model_validate(job.payload["ref"])
+            pdf_url = job.payload.get("pdf_url")
+            doc = (await ingest_ref(ref, self.http, self.db, pdf_url=pdf_url)).doc
         self.progress(paper_id, "reading", 25, f"Read {len(doc.anchors)} parts of the paper")
         self.queue.submit(
             "chart_master", f"chart_master:{paper_id}", priority="P0", paper_id=paper_id
