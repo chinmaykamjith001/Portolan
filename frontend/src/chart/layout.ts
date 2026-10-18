@@ -10,6 +10,19 @@ export const CENTER_SIZE = 196;
 export const ELK_MAX_NODES = 60;
 const EDGE_LENGTH = 225;
 const GAP = 24;
+// Edge labels (chart.module.css .edgeLabel): 12px italic, at most 160px wide, wrapping.
+const LABEL_MAX_WIDTH = 160;
+const LABEL_CHAR_WIDTH = 6.2;
+const LABEL_MARGIN = 28; // padding on both sides plus the arrowhead
+
+/** Center-to-center length that leaves room for the link's label between the two shapes, so a
+ * node never covers it. Never shorter than the default. */
+export function edgeLengthFor(sizeA: number, sizeB: number, label: string | undefined): number {
+  const text = label?.trim() ?? "";
+  if (!text) return EDGE_LENGTH;
+  const width = Math.min(LABEL_MAX_WIDTH, Math.ceil(text.length * LABEL_CHAR_WIDTH));
+  return Math.max(EDGE_LENGTH, Math.round(sizeA / 2 + sizeB / 2 + width + LABEL_MARGIN));
+}
 
 export interface LayoutNode {
   id: string;
@@ -19,7 +32,7 @@ export interface LayoutNode {
 export interface LayoutInput {
   center: string;
   nodes: LayoutNode[];
-  edges: { source: string; target: string }[];
+  edges: { source: string; target: string; label?: string }[];
 }
 
 export type Positions = Record<string, { x: number; y: number }>;
@@ -29,11 +42,18 @@ export interface ElkLike {
   layout(graph: ElkGraph): Promise<ElkGraph>;
 }
 
+export interface ElkEdge {
+  id: string;
+  sources: string[];
+  targets: string[];
+  layoutOptions?: Record<string, string>;
+}
+
 export interface ElkGraph {
   id: string;
   layoutOptions?: Record<string, string>;
   children?: { id: string; width: number; height: number; x?: number; y?: number; layoutOptions?: Record<string, string> }[];
-  edges?: { id: string; sources: string[]; targets: string[] }[];
+  edges?: ElkEdge[];
 }
 
 export function sizeOf(isCenter: boolean): number {
@@ -52,14 +72,14 @@ export function layoutInputFor(payload: LayerPayload): LayoutInput {
     nodes: ids.map((id) => ({ id, size: sizeOf(id === layer.center) })),
     edges: layer.links
       .filter((l) => present.has(l.source) && present.has(l.target) && l.source !== l.target)
-      .map((l) => ({ source: l.source, target: l.target })),
+      .map((l) => ({ source: l.source, target: l.target, label: l.label })),
   };
 }
 
 /** A stable key for the position cache: same concepts and links → same picture. */
 export function layoutKey(paperId: string, layerId: string, input: LayoutInput): string {
   const nodes = input.nodes.map((n) => n.id).join(",");
-  const edges = input.edges.map((e) => `${e.source}>${e.target}`).join(",");
+  const edges = input.edges.map((e) => `${e.source}>${e.target}:${e.label ?? ""}`).join(",");
   return `${paperId}|${layerId}|${nodes}|${edges}`;
 }
 
@@ -118,7 +138,17 @@ export function ringLayout(input: LayoutInput): Positions {
 export function toElkGraph(input: LayoutInput): ElkGraph {
   const start = ringLayout(input);
   const reach = bfs(input);
-  const edges = input.edges.map((e, i) => ({ id: `e${i}`, sources: [e.source], targets: [e.target] }));
+  const size = new Map(input.nodes.map((n) => [n.id, n.size]));
+  const edges: ElkEdge[] = input.edges.map((e, i) => ({
+    id: `e${i}`,
+    sources: [e.source],
+    targets: [e.target],
+    layoutOptions: {
+      "elk.stress.desiredEdgeLength": String(
+        edgeLengthFor(size.get(e.source) ?? NODE_SIZE, size.get(e.target) ?? NODE_SIZE, e.label),
+      ),
+    },
+  }));
   // Tie unlinked concepts to the center so stress keeps them near it instead of packing them aside.
   input.nodes.forEach((n, i) => {
     if (!reach.has(n.id)) {
