@@ -52,7 +52,7 @@ def recent_failure(svc: Services, key: str) -> str | None:
     so a page that keeps asking cannot loop on a deterministic failure or burn free-tier requests.
     """
     live = svc.queue.get(key)
-    if live is not None and live.state != "failed":
+    if live is not None and live.state in ("queued", "running"):
         return None
     row = svc.db.fetchone(
         "SELECT state, error, attempts, updated_at FROM jobs WHERE job_key = ?", (key,)

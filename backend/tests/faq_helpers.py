@@ -183,10 +183,12 @@ class FakeFaqLLM:
         invented_concept: int | None = None,  # faq_anticipated: this concept cites only made-up ids
         unsupported: bool = False,  # ask_answer: supported=false
         invented_only: bool = False,  # ask_answer: cites only made-up sources
+        cites_nothing: bool = False,  # ask_answer: answers but leaves every citation list empty
         fail: bool = False,
     ) -> None:
         self.drop_cluster, self.invented_concept = drop_cluster, invented_concept
         self.unsupported, self.invented_only, self.fail = unsupported, invented_only, fail
+        self.cites_nothing = cites_nothing
         self.calls: list[tuple[str, str]] = []
 
     def count(self, template_id: str) -> int:
@@ -242,6 +244,8 @@ class FakeFaqLLM:
                 "faq": [] if self.invented_only else faq[:1],
                 "code": ["nope.py:1-2"] if self.invented_only else [*spans[:1], "nope.py:1-2"],
             }
+            if self.cites_nothing:
+                body.update(anchors=[], faq=[], code=[])
         return ProviderResponse(text=json.dumps(body), usage=Usage(), model="fake")
 
 

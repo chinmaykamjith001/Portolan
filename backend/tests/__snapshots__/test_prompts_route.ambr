@@ -67,7 +67,11 @@
               },
               "required": [
                 "key",
-                "title"
+                "title",
+                "role",
+                "summary",
+                "concept_id",
+                "transition_to_next"
               ],
               "title": "RouteStopOut",
               "type": "object"
@@ -82,6 +86,9 @@
               "type": "array"
             }
           },
+          "required": [
+            "stops"
+          ],
           "title": "RouteSectionOut",
           "type": "object"
         }
@@ -209,7 +216,11 @@
               },
               "required": [
                 "key",
-                "title"
+                "title",
+                "role",
+                "summary",
+                "concept_id",
+                "transition_to_next"
               ],
               "title": "RouteStopOut",
               "type": "object"
@@ -224,6 +235,9 @@
               "type": "array"
             }
           },
+          "required": [
+            "stops"
+          ],
           "title": "RouteSectionOut",
           "type": "object"
         }

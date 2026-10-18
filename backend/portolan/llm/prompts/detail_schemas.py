@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from portolan.llm.prompts.lenient import ReplySchema
 
 
-class ExplainSections(BaseModel):
+class ExplainSections(ReplySchema):
     what_it_is: str  # intuition first, plain words
     how_it_works: str  # step by step; the paper's notation in $...$ where it helps
     why_its_here: str  # its role in this paper and under the parent the reader came from
@@ -13,12 +15,12 @@ class ExplainSections(BaseModel):
     common_confusion: str  # one misconception and its correction
 
 
-class ExplainOut(BaseModel):
+class ExplainOut(ReplySchema):
     gist: str  # one sentence
     sections: ExplainSections
 
 
-class EdgeOut(BaseModel):
+class EdgeOut(ReplySchema):
     headline: str  # the relationship restated as a sentence
     body: str  # 80-150 words on why the relationship holds
     why_it_matters: str  # one sentence

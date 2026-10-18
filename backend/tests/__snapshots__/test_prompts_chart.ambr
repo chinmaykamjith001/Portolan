@@ -92,7 +92,8 @@
               },
               "required": [
                 "title",
-                "gist"
+                "gist",
+                "anchors"
               ],
               "title": "CenterOut",
               "type": "object"
@@ -138,7 +139,10 @@
               "required": [
                 "key",
                 "title",
-                "gist"
+                "gist",
+                "anchors",
+                "is_first_principle",
+                "grounding_guess"
               ],
               "title": "ConceptOut",
               "type": "object"
@@ -175,7 +179,8 @@
               "required": [
                 "source",
                 "target",
-                "label"
+                "label",
+                "kind"
               ],
               "title": "LinkOut",
               "type": "object"
@@ -377,7 +382,10 @@
               "required": [
                 "key",
                 "title",
-                "gist"
+                "gist",
+                "anchors",
+                "is_first_principle",
+                "grounding_guess"
               ],
               "title": "ConceptOut",
               "type": "object"
@@ -414,7 +422,8 @@
               "required": [
                 "source",
                 "target",
-                "label"
+                "label",
+                "kind"
               ],
               "title": "LinkOut",
               "type": "object"

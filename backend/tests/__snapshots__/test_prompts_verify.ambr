@@ -93,7 +93,10 @@
                   "verdict",
                   "confidence",
                   "paper_side",
-                  "code_side"
+                  "code_side",
+                  "path",
+                  "start_line",
+                  "end_line"
                 ],
                 "title": "VerdictOut",
                 "type": "object"
@@ -108,6 +111,9 @@
                 "type": "array"
               }
             },
+            "required": [
+              "verdicts"
+            ],
             "title": "JudgeOut",
             "type": "object"
           }
@@ -229,7 +235,9 @@
                 },
                 "required": [
                   "anchor",
+                  "claim_type",
                   "subject",
+                  "value",
                   "text"
                 ],
                 "title": "ClaimOut",
@@ -245,6 +253,9 @@
                 "type": "array"
               }
             },
+            "required": [
+              "claims"
+            ],
             "title": "ClaimsOut",
             "type": "object"
           }
@@ -354,6 +365,7 @@
                   "path",
                   "start_line",
                   "end_line",
+                  "severity",
                   "confidence"
                 ],
                 "title": "UndocumentedOut",
@@ -369,6 +381,9 @@
                 "type": "array"
               }
             },
+            "required": [
+              "items"
+            ],
             "title": "ReverseOut",
             "type": "object"
           }

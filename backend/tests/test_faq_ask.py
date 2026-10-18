@@ -105,3 +105,10 @@ async def test_the_question_cannot_close_the_untrusted_block(db: Database) -> No
     user = llm.calls[0][1]
     assert user.count("</untrusted>") == 3  # exactly the three blocks we opened
     assert "<\\/untrusted>" in user
+
+
+async def test_an_answer_that_cites_nothing_points_at_the_best_passage(db: Database) -> None:
+    """Flash-Lite sometimes answers from the given passages without listing any of them."""
+    item = await ask(db, FakeFaqLLM(cites_nothing=True))
+    assert item.supported and item.answer_markdown.startswith("Because the scores")
+    assert len(item.anchors_cited) == 1

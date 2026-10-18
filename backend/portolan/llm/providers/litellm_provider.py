@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
 import re
 from typing import Any
 
@@ -80,7 +81,26 @@ def _error(litellm: Any, exc: Exception, provider: str, model: str) -> Exception
             f"{provider} doesn't offer the model {model!r}. "
             "Run `uv run portolan doctor` and update [llm.models] in portolan.toml."
         )
+    if isinstance(exc, litellm.BadRequestError) and (detail := _provider_message(exc)):
+        return ProviderError(f"{provider} refused the request: {detail}")
     return ProviderError(f"The {provider} provider failed ({type(exc).__name__}).")
+
+
+_MESSAGE = re.compile(r'"message"\s*:\s*"((?:[^"\\]|\\.){1,400})"')
+
+
+def _provider_message(exc: Exception) -> str | None:
+    """Gemini's own one-line reason for a 400 ("Invalid value at 'generation_config...'"), with
+    anything key-like masked. It names request fields, never prompt text."""
+    found = _MESSAGE.search(str(exc))
+    if not found:
+        return None
+    text = found.group(1).replace("\\n", " ").strip()
+    key = os.environ.get("GEMINI_API_KEY", "")
+    if key:
+        text = text.replace(key, "<key>")
+    text = re.sub(r"(AIza|AQ\.)[A-Za-z0-9_\-]{10,}", "<key>", text)
+    return text[:240]
 
 
 class LiteLLMProvider:

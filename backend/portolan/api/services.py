@@ -250,6 +250,12 @@ class Services:
             await ensure_index(self.config, self.db, paper_id, repo)  # no-op once indexed
         grounding = await ground_code(doc, self.gateway, self.chart, self.db, concept_id)
         self.details.save_grounding(paper_id, grounding)
+        concept = self.chart.get_concept(paper_id, concept_id)
+        if concept is not None and concept.grounding != grounding.grounding:
+            # The node's shape and the drawer header read the concept, not the grounding record.
+            self.chart.upsert_concept(
+                paper_id, concept.model_copy(update={"grounding": grounding.grounding})
+            )
         self.bus.publish(paper_id, "detail_ready", {"concept_id": concept_id, "part": "code"})
 
     async def _example(self, job: Job) -> None:

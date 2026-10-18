@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from portolan.llm.prompts.lenient import ReplySchema
 
 
-class RouteStopOut(BaseModel):
+class RouteStopOut(ReplySchema):
     key: str  # echoes the input stop key ("s1", "s2", ...)
     title: str  # short: what the paper does here, not just the heading
     role: str = "other"  # first_mention | definition | setting | result | argument | other
@@ -14,5 +16,5 @@ class RouteStopOut(BaseModel):
     transition_to_next: str | None = None  # the connective that leads to the next stop
 
 
-class RouteSectionOut(BaseModel):
+class RouteSectionOut(ReplySchema):
     stops: list[RouteStopOut] = Field(default_factory=list[RouteStopOut])

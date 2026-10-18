@@ -223,6 +223,10 @@ export function usePaperEvents(paperId: string | null): LiveState {
         } else if (data.part === "code" || data.part === "example" || data.part === "graph") {
           void qc.invalidateQueries({ queryKey: [data.part, paperId, String(data.concept_id)] });
           void qc.invalidateQueries({ queryKey: keys.concept(paperId, String(data.concept_id)) });
+          if (data.part === "code") {
+            // Grounding changes the node's shape: refresh the layers on screen.
+            void qc.invalidateQueries({ queryKey: ["layer", paperId], refetchType: "active" });
+          }
         } else {
           void qc.invalidateQueries({ queryKey: ["explanation", paperId, String(data.concept_id)] });
           void qc.invalidateQueries({ queryKey: keys.concept(paperId, String(data.concept_id)) });

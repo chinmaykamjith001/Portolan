@@ -353,3 +353,62 @@ itself requires (§13.12), so the values were adjusted slightly:
 | `--code-dim` | `#8B8E96` | `#9194A0` | 4.36 → 4.73 on highlighted code lines |
 
 The spec file itself was not edited (it wins over everything else); update §14.1 if you agree.
+
+## Real Gemini run (2026-10-18) — measured, not assumed
+
+An end-to-end run through the HTTP API with the owner's free key (paper: a 5-section PDF about the
+`tiny_transformer` fixture, code: that fixture linked as a local folder). arXiv/GitHub were blocked
+in the build environment, so ingestion went through PDF upload.
+
+- **`gemini-3.8-flash` allows 20 free requests per day** (Google's 429:
+  `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit 20). `gemini-3.5-flash-lite` kept
+  working. The configured `rpd = 1400` is far above what some models allow, so a paper used up the
+  `default`/`strong` model within minutes. **Decision:** when the provider reports a model's daily
+  quota is gone, the gateway remembers it until midnight Pacific and sends that role to the `fast`
+  model (cached answers of the original model are still used); if both are gone the job pauses
+  with the reason shown. `portolan doctor` now says so.
+- Flash-Lite **omits optional fields** (`notes` in ground_code, citation lists in ask_answer),
+  which dropped correct answers. **Decision:** every field of a reply schema is listed as required
+  in the JSON Schema sent to the model (`ReplySchema`); our validation still has defaults.
+- Enums and counts are validated **leniently** (unknown → safe default, extra concepts trimmed):
+  one off-list word must not throw away a whole reply.
+- Retrieval for the Ask box missed "divided by sqrt(d_k)" vs "scale by the square root of d_k".
+  **Decision:** notation is spelled out before matching (sqrt → square root, lr, dim, eq, ...) and a
+  matched equation brings its neighbouring paragraphs.
+- Literal verification called "label smoothing 0.1" a match because a class default was 0.1 while
+  the config/CLI default was 0.0. **Decision:** conflicting exactly-named values go to the judge.
+
+Results (all through the API, real model): master layer 13 concepts in 32 s; jump-in 4 children;
+default explanation 215 words in the §10.7.1 structure; simpler angle; edge explanation; code
+grounding with 4 line notes on `toyformer/attention.py` 10–17 (and "pre-LN vs the paper's post-LN"
+for layer norm); worked example + "another example" computed in the sandbox; line graph; route of
+10 stops in section order with transitions and a sub-route; verification 17 findings (literal and
+static decided most with no LLM); FAQ built; Ask answered with a citation and code lines, and said
+"not supported" for an unanswerable question. ~175 requests, most of them burned by the paused-job
+re-queue bug fixed in the same session.
+
+## Real Gemini run (2026-10-18) — measured, not assumed
+
+End-to-end through the HTTP API with the owner's free key (paper: a 5-section PDF about the
+`tiny_transformer` fixture; code: that fixture linked as a local folder; arXiv/GitHub were blocked
+in the build environment, so ingestion used PDF upload).
+
+- **`gemini-3.8-flash` allows 20 free requests per day** (Google's 429 names
+  `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit 20); `gemini-3.5-flash-lite` kept
+  working. **Decision:** when the provider reports a model's daily quota is gone, the gateway
+  remembers it until midnight Pacific and sends that role to the `fast` model (the original
+  model's cached answers are still used); if both are gone the job pauses with the reason shown.
+  `portolan doctor` says so.
+- Flash-Lite **omits optional fields** (`notes`, citation lists), which dropped correct answers.
+  **Decision:** every reply field is listed as required in the schema sent to the model
+  (`ReplySchema`); our own validation keeps defaults. Enums and counts validate leniently.
+- Ask retrieval missed "divided by sqrt(d_k)" vs "scale by the square root of d_k". **Decision:**
+  notation is spelled out before matching, and a matched equation brings its neighbouring paragraphs.
+- Literal verification called "label smoothing 0.1" a match (class default 0.1, config/CLI default
+  0.0). **Decision:** conflicting exactly-named values go to the judge.
+
+Measured: master layer 13 concepts (32 s); explanation 215 words in the §10.7.1 structure; code
+grounding with 4 line notes on `toyformer/attention.py` 10–17; sandboxed example + "another
+example"; line graph; route of 10 stops in section order + a sub-route; 17 verification findings
+(most decided with no LLM); FAQ; Ask answered with a citation and code lines, and said "not
+supported" for an unanswerable question. The UI rendered all of it in Chromium.

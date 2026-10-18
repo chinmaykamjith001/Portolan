@@ -208,3 +208,49 @@ async def test_record_then_replay_with_mock(
     # The mock never touches the rate limiter or budget.
     assert replay.limiter.budget.today() == []
     fresh_db.close()
+
+
+async def test_a_model_out_of_daily_quota_falls_back_to_the_fast_model(
+    config: Config, db: Database, clock: FakeClock
+) -> None:
+    from portolan.llm.types import ProviderQuotaExhausted
+
+    provider = ScriptedProvider(
+        [
+            ProviderQuotaExhausted("today's free quota for gemini/test-flash is used up"),
+            ok('{"gist": "from the fast model"}'),
+            ok('{"gist": "second, straight to the fast model"}'),
+        ]
+    )
+    gw, events = gateway(config, db, provider, clock)
+    first = await gw.call("default", TEMPLATE, {"concept": "softmax"}, Gist, "P0", None)
+    assert first.parsed == Gist(gist="from the fast model")
+    assert [m for m, _msgs, _ctx in provider.calls] == [
+        "gemini/test-flash",
+        "gemini/test-flash-lite",
+    ]
+    assert (
+        "model_fallback",
+        {"model": "gemini/test-flash", "fallback": "gemini/test-flash-lite"},
+    ) in events
+
+    # The exhausted model isn't asked again today: no wasted request, no wasted quota.
+    second = await gw.call("strong", TEMPLATE, {"concept": "attention"}, Gist, "P0", None)
+    assert second.parsed == Gist(gist="second, straight to the fast model")
+    assert [m for m, _msgs, _ctx in provider.calls][-1] == "gemini/test-flash-lite"
+    assert len(provider.calls) == 3
+
+
+async def test_when_the_fast_model_is_out_too_the_job_pauses(
+    config: Config, db: Database, clock: FakeClock
+) -> None:
+    from portolan.llm.types import ProviderQuotaExhausted
+
+    gone = ProviderQuotaExhausted("used up")
+    provider = ScriptedProvider([gone, gone])
+    gw, _ = gateway(config, db, provider, clock)
+    with pytest.raises(ProviderQuotaExhausted):
+        await gw.call("default", TEMPLATE, {"concept": "softmax"}, Gist, "P0", None)
+    with pytest.raises(ProviderQuotaExhausted):  # both known exhausted: no request at all
+        await gw.call("default", TEMPLATE, {"concept": "x"}, Gist, "P0", None)
+    assert len(provider.calls) == 2

@@ -1,8 +1,10 @@
 """literal_match (spec §10.9.3a): compare a paper value with a named value in the code. No LLM.
 
 Precision first: a mismatch needs a value in the code that is named exactly like the claim's
-subject and disagrees, with nothing else in the code agreeing. A merely related name
-(`attention_dropout` for "dropout rate") can confirm a match but never produces a mismatch.
+subject and disagrees, with nothing else in the code agreeing. Exactly-named values that agree
+and disagree at once are left to the judge (which default applies is not a literal question).
+A merely related name (`attention_dropout` for "dropout rate") can confirm a match but never
+produces a mismatch.
 """
 
 from __future__ import annotations
@@ -54,6 +56,11 @@ def literal_check(ctx: CodeContext, claim: Claim) -> Decision | None:
             comparable.append((item, same))
 
     agreeing = next((it for it, same in comparable if same), None)
+    conflict = next((it for it, same in comparable if not same and it in exact), None)
+    if agreeing is not None and conflict is not None:
+        # The code says both (a class default of 0.1, a config or CLI default of 0.0): which one
+        # applies isn't a literal question. Leave it to the judge, which sees both spans.
+        return None
     if agreeing is not None:
         return Decision(
             "matches",

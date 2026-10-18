@@ -48,7 +48,11 @@
               }
             },
             "required": [
-              "supported"
+              "supported",
+              "answer",
+              "anchors",
+              "faq",
+              "code"
             ],
             "title": "AskOut",
             "type": "object"
@@ -146,8 +150,10 @@
                 },
                 "required": [
                   "cluster",
+                  "keep",
                   "question",
-                  "answer"
+                  "answer",
+                  "anchors"
                 ],
                 "title": "ClusterAnswerOut",
                 "type": "object"
@@ -258,7 +264,8 @@
                 "required": [
                   "concept",
                   "question",
-                  "answer"
+                  "answer",
+                  "anchors"
                 ],
                 "title": "AnticipatedOut",
                 "type": "object"

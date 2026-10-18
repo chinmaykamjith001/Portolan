@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from portolan.llm.prompts.lenient import ReplySchema
 
 
-class ClusterAnswerOut(BaseModel):
+class ClusterAnswerOut(ReplySchema):
     cluster: int  # the `index` of the input cluster
     keep: bool = True  # false when neither the source nor the passages let you answer
     question: str  # the question, cleaned up into one standalone sentence
@@ -13,22 +15,22 @@ class ClusterAnswerOut(BaseModel):
     anchors: list[str] = Field(default_factory=list[str])  # ids of the given passages it rests on
 
 
-class AnswerBatchOut(BaseModel):
+class AnswerBatchOut(ReplySchema):
     items: list[ClusterAnswerOut]
 
 
-class AnticipatedOut(BaseModel):
+class AnticipatedOut(ReplySchema):
     concept: int  # the `index` of the input concept
     question: str  # what a newcomer would most plausibly ask about it
     answer: str
     anchors: list[str] = Field(default_factory=list[str])
 
 
-class AnticipatedBatchOut(BaseModel):
+class AnticipatedBatchOut(ReplySchema):
     items: list[AnticipatedOut]
 
 
-class AskOut(BaseModel):
+class AskOut(ReplySchema):
     supported: bool  # false when the sources don't answer the question
     answer: str = ""  # 40-150 words; empty when unsupported
     anchors: list[str] = Field(default_factory=list[str])  # given passage ids

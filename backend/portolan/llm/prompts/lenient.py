@@ -6,9 +6,9 @@ casing/spacing variants to the allowed value and anything unknown to a safe defa
 
 from __future__ import annotations
 
-from typing import Any, get_args
+from typing import Any, cast, get_args
 
-from pydantic import BeforeValidator
+from pydantic import BaseModel, BeforeValidator, ConfigDict
 
 
 def lenient(literal: Any, default: str) -> BeforeValidator:
@@ -43,3 +43,18 @@ def lenient_float(default: float = 0.5) -> BeforeValidator:
         return min(1.0, max(0.0, number))
 
     return BeforeValidator(fix)
+
+
+def _require_all(schema: dict[str, Any]) -> None:
+    """List every property as required in the JSON Schema sent to the model. Gemini tends to
+    leave out optional fields (no `notes`, no `anchors`), which drops otherwise good answers;
+    our own validation keeps the defaults, so a reply that still omits one stays usable."""
+    props = schema.get("properties")
+    if isinstance(props, dict):
+        schema["required"] = list(cast(dict[str, Any], props))
+
+
+class ReplySchema(BaseModel):
+    """Base for structured LLM replies: every field is required in the schema the model sees."""
+
+    model_config = ConfigDict(json_schema_extra=_require_all)

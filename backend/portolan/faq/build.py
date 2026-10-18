@@ -374,6 +374,11 @@ async def answer_question(
     spans = {f"{c['path']}:{c['start_line']}-{c['end_line']}": c for c in code}
     cited_code = [spans[c] for c in dict.fromkeys(out.code) if c in spans]
     answer = out.answer.strip()
+    cited_nothing = not (out.anchors or out.faq or out.code)  # invented ids are not "nothing"
+    if out.supported and answer and passages and cited_nothing:
+        # Answered from the passages but cited none of them: the answer was written from what we
+        # gave it, best match first, so point at that passage rather than discard the answer.
+        cited = [passages[0]["id"]]
     if not out.supported or not answer or not (cited or cited_faq or cited_code):
         return _unsupported(question)
 

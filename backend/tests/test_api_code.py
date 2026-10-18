@@ -96,7 +96,9 @@ def test_code_flow_without_and_with_a_repo(client: TestClient, fake: FakeGroundL
     client.get(url)
     assert fake.calls["ground_code"] == 1  # stored: no second request
 
-    assert client.get(f"/api/papers/{paper_id}/concepts/{second}").json()["details"]["code"]
+    concept = client.get(f"/api/papers/{paper_id}/concepts/{second}").json()
+    assert concept["details"]["code"]
+    assert concept["concept"]["grounding"] == "in_code"  # the node's shape follows the result
     events = [e for e in svc.bus.recent(paper_id) if e.type == "detail_ready"]
     assert events[-1].data == {"concept_id": second, "part": "code"}
 

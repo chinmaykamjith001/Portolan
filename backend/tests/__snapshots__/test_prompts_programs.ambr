@@ -55,7 +55,9 @@
           },
           "required": [
             "caption",
-            "program"
+            "source_label",
+            "program",
+            "note"
           ],
           "title": "ExampleOut",
           "type": "object"
@@ -159,7 +161,9 @@
           },
           "required": [
             "caption",
-            "program"
+            "source_label",
+            "program",
+            "note"
           ],
           "title": "ExampleOut",
           "type": "object"
@@ -287,7 +291,10 @@
             }
           },
           "required": [
-            "template"
+            "template",
+            "caption",
+            "program",
+            "note"
           ],
           "title": "GraphOut",
           "type": "object"

@@ -305,3 +305,26 @@ typecheck, 185 tests, build (first-load JS 81 KB gzipped); 21 Playwright specs i
    and the same for `1706.03762` (see CONTRIBUTING.md for per-step costs).
 3. `pytest -m network` (ingest, repos, FAQ sources) to confirm the external shapes.
 4. `make eval ARGS="--data <scicoqa clone> --limit 25"` after checking `portolan eval --inspect`.
+
+## Post-release fixes from a full review and a real Gemini run (2026-10-18)
+
+- Review by three agents (backend core, pipelines, frontend) plus a real end-to-end run through the
+  API with Gemini (see DECISIONS.md "Real Gemini run"). Fixed: jobs failing silently (pages stuck on
+  "Building map"), paused jobs re-queued by polling, ingest/version id mismatches, ids with "/",
+  strict LLM schemas, per-model daily quotas (fallback to the fast model), Gemini timeouts and error
+  messages, a P0-only worker, Windows sandbox (SYSTEMROOT, thread fallback, UTF-8, CRLF), missing
+  `POST /api/papers/{id}/repo` + a Code dialog, SSE reconnect, stale state across papers, Ask
+  retrieval, conflicting literal values, grounding not reaching the concept's shape.
+- Windows test failures reported by the owner's machine: fixed or made portable (memory-limit and
+  /proc tests skip off Linux; file-blocking tests use a real file on any OS).
+
+## Post-release fixes: full review + real Gemini run (2026-10-18)
+
+Three review agents (backend core, pipelines, frontend) and a real end-to-end API run with Gemini
+(DECISIONS.md "Real Gemini run"). Fixed: pages stuck on "Building map" when a job failed; paused
+jobs re-queued by polling; ingest/version id mismatches; ids containing "/"; strict LLM schemas;
+per-model daily quotas (fallback to the fast model); Gemini timeout and error messages; a P0-only
+worker; Windows sandbox (SYSTEMROOT, thread fallback, UTF-8, CRLF); the missing
+`POST /api/papers/{id}/repo` plus a Code dialog; SSE reconnect; stale state across papers; Ask
+retrieval; conflicting literal values; grounding not reaching the node shape. The owner's Windows
+test failures are fixed or made portable.

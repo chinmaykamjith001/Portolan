@@ -18,13 +18,14 @@ from portolan.config import PLACEHOLDER_MARK, Config
 from portolan.llm.cache import LLMCache, cache_key, inputs_hash
 from portolan.llm.prompts.base import PromptTemplate
 from portolan.llm.providers import CallContext, FixtureStore, Provider, make_provider
-from portolan.llm.ratelimit import BudgetStore, Clock, RateLimiter, RealClock
+from portolan.llm.ratelimit import BudgetStore, Clock, RateLimiter, RealClock, pacific_day
 from portolan.llm.types import (
     LLMError,
     LLMResult,
     LLMValidationError,
     Message,
     Priority,
+    ProviderQuotaExhausted,
     ProviderRateLimited,
     ProviderResponse,
     RateLimitExhausted,
@@ -71,6 +72,7 @@ class Gateway:
         self.recorder = recorder
         self.rng = rng or random.Random()
         self.on_event: EventHandler = on_event or (lambda _type, _payload: None)
+        self._exhausted: dict[str, str] = {}  # model -> Pacific day its provider quota ran out
 
     def model_for(self, role: Role) -> str:
         return self.config.llm.models.for_role(role)
@@ -96,33 +98,80 @@ class Gateway:
                 f"No model is configured for the '{role}' role. "
                 "Run `portolan doctor` and copy its suggested [llm.models] into portolan.toml."
             )
+        # Free tiers differ wildly per model (some Flash models allow 20 requests a day). When a
+        # model's daily quota is gone, the role falls back to the fast model until the day resets.
+        fallback = self.model_for("fast")
+        can_fall_back = fallback != model and PLACEHOLDER_MARK not in fallback
+        if self._quota_gone(model):
+            hit = self._from_cache(model, role, template, inputs, schema)
+            if hit is not None:
+                return hit
+            if not can_fall_back or self._quota_gone(fallback):
+                raise ProviderQuotaExhausted(
+                    f"Today's free quota for {model} is used up. It resets at midnight US Pacific."
+                )
+            return await self._call_model(fallback, role, template, inputs, schema, priority)
+        try:
+            return await self._call_model(model, role, template, inputs, schema, priority)
+        except ProviderQuotaExhausted:
+            self._exhausted[model] = pacific_day()
+            if not can_fall_back or self._quota_gone(fallback):
+                raise
+            self.on_event("model_fallback", {"model": model, "fallback": fallback})
+            try:
+                return await self._call_model(fallback, role, template, inputs, schema, priority)
+            except ProviderQuotaExhausted:
+                self._exhausted[fallback] = pacific_day()
+                raise
+
+    def _quota_gone(self, model: str) -> bool:
+        return self._exhausted.get(model) == pacific_day()
+
+    def _from_cache(
+        self,
+        model: str,
+        role: Role,
+        template: PromptTemplate,
+        inputs: dict[str, Any],
+        schema: type[BaseModel] | None,
+    ) -> LLMResult | None:
+        in_hash = inputs_hash(inputs)
+        cached = self.cache.get(cache_key(model, template.id, template.version, in_hash))
+        if cached is None:
+            return None
+        try:
+            parsed = _parse(cached.text, schema) if schema else None
+        except (ValidationError, json.JSONDecodeError):
+            return None  # stale entry from an older schema: regenerate
+        if self.recorder is not None:  # a record run also captures cached answers
+            self.recorder.write(
+                CallContext(
+                    template_id=template.id,
+                    template_version=template.version,
+                    inputs_hash=in_hash,
+                    role=role,
+                ),
+                ProviderResponse(text=cached.text, usage=cached.usage, model=cached.model),
+            )
+        return LLMResult(
+            parsed=parsed, raw_text=cached.text, usage=cached.usage, cache_hit=True,
+            model=cached.model,
+        )  # fmt: skip
+
+    async def _call_model(
+        self,
+        model: str,
+        role: Role,
+        template: PromptTemplate,
+        inputs: dict[str, Any],
+        schema: type[BaseModel] | None,
+        priority: Priority,
+    ) -> LLMResult:
+        hit = self._from_cache(model, role, template, inputs, schema)
+        if hit is not None:
+            return hit
         in_hash = inputs_hash(inputs)
         key = cache_key(model, template.id, template.version, in_hash)
-
-        cached = self.cache.get(key)
-        if cached is not None:
-            try:
-                parsed = _parse(cached.text, schema) if schema else None
-            except (ValidationError, json.JSONDecodeError):
-                parsed = None  # stale entry from an older schema: fall through and regenerate
-            else:
-                if self.recorder is not None:  # a record run also captures cached answers
-                    self.recorder.write(
-                        CallContext(
-                            template_id=template.id,
-                            template_version=template.version,
-                            inputs_hash=in_hash,
-                            role=role,
-                        ),
-                        ProviderResponse(text=cached.text, usage=cached.usage, model=cached.model),
-                    )
-                return LLMResult(
-                    parsed=parsed,
-                    raw_text=cached.text,
-                    usage=cached.usage,
-                    cache_hit=True,
-                    model=cached.model,
-                )
 
         messages = template.render(inputs)
         ctx = CallContext(

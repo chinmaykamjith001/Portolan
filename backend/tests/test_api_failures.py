@@ -98,3 +98,22 @@ def test_still_failing_job_reruns_once_after_the_cooldown(client: TestClient) ->
         )
     )
     assert client.get(f"/api/papers/{paper_id}/chart/master").status_code == 502
+
+
+def test_a_paused_job_says_why_and_is_not_requeued_by_polling(client: TestClient) -> None:
+    svc: Services = client.app.state.services  # type: ignore[attr-defined]
+    _swap_llm(svc, NoFixturesLLM())
+    paper_id = client.post("/api/papers", json={"input": ARXIV}).json()["paper_id"]
+    key = f"chart_master:{paper_id}"
+    wait_for(lambda: (j := svc.queue.get(key)) is not None and j.state == "failed")
+    reason = (
+        "ProviderQuotaExhausted: gemini says today's free quota is used up. It resets at midnight."
+    )
+    svc.db.execute("UPDATE jobs SET state = 'paused', error = ? WHERE job_key = ?", (reason, key))
+    before = svc.queue.get(key)
+    assert before is not None
+    for _ in range(5):
+        r = client.get(f"/api/papers/{paper_id}/chart/master")
+        assert r.status_code == 502 and "free quota is used up" in r.json()["error"]["message"]
+    after = svc.queue.get(key)
+    assert after is not None and after.state == "paused" and after.attempts == before.attempts

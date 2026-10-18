@@ -31,9 +31,20 @@ def _stem(w: str) -> str:
     return w
 
 
+# Notation people type vs. the words papers write: "divided by sqrt(d_k)" must find "we scale by
+# the square root of d_k". Applied to queries and texts alike.
+_SPELLED = {
+    "√": " square root ", "sqrt": " square root ", "softmax": " softmax ", "argmax": " argmax ",
+    "lr": " learning rate ", "dim": " dimension ", "dims": " dimension ", "eq": " equation ",
+    "params": " parameters ", "param": " parameter ", "num": " number ",
+}  # fmt: skip
+_SPELL = re.compile(r"√|\b(?:sqrt|lr|dims?|eq|params?|num)\b")
+
+
 def tokens(text: str) -> list[str]:
     """Lowercase, stemmed content words."""
-    return [_stem(w) for w in _WORD.findall(text.lower()) if w not in STOPWORDS and len(w) >= 2]
+    text = _SPELL.sub(lambda m: _SPELLED[m.group(0)], text.lower())
+    return [_stem(w) for w in _WORD.findall(text) if w not in STOPWORDS and len(w) >= 2]
 
 
 def jaccard(a: set[str], b: set[str]) -> float:
@@ -75,9 +86,27 @@ def rank_texts(query: str, texts: list[str], k: int, *, min_hits: int = 1) -> li
 
 
 def anchor_passages(doc: PaperDoc, query: str, k: int = 3, *, min_hits: int = 1) -> list[Anchor]:
-    """Paper anchors (with text) that best match `query`."""
+    """Paper anchors (with text) that best match `query`.
+
+    An equation rarely explains itself: the paragraphs right before and after it (same parent)
+    usually say why it looks the way it does, so a matched equation brings them along."""
     pool = [a for a in doc.anchors if a.text and a.text.strip()]
-    return [pool[i] for i in rank_texts(query, [a.text for a in pool], k, min_hits=min_hits)]
+    hits = [pool[i] for i in rank_texts(query, [a.text for a in pool], k, min_hits=min_hits)]
+    ordered = sorted(pool, key=lambda a: a.order)
+    position = {a.id: i for i, a in enumerate(ordered)}
+    out: list[Anchor] = []
+    for a in hits:
+        if a not in out:
+            out.append(a)
+        if a.kind != "equation":
+            continue
+        i = position[a.id]
+        for j in (i + 1, i - 1):
+            if 0 <= j < len(ordered):
+                near = ordered[j]
+                if near.kind == "paragraph" and near.parent_id == a.parent_id and near not in out:
+                    out.append(near)
+    return out[: max(k, len(hits))]
 
 
 def passage(a: Anchor, limit: int = 1200) -> dict[str, str]:

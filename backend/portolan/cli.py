@@ -121,7 +121,12 @@ def _check_gemini_models() -> int:
         typer.echo("\n  Suggested portolan.toml section:\n\n  [llm.models]")
         for role, model in suggestion.items():
             typer.echo(f'  {role} = "{model}"')
-        typer.echo("")
+        typer.echo(
+            "\n  Free keys: daily limits differ per model and some are tiny (seen: 20 requests a"
+            "\n  day for a Flash model). When a model's daily quota runs out, Portolan uses the"
+            "\n  `fast` model for that role until midnight US Pacific. Your real limits are at"
+            "\n  https://aistudio.google.com (rate limits page).\n"
+        )
     else:
         _line(False, "No Flash/Flash-Lite model found; set [llm.models] by hand.")
         return 1

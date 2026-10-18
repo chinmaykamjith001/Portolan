@@ -299,3 +299,22 @@ def test_issue_counts_are_reset_where_findings_go_away(db: Database) -> None:
     chart.set_issue_counts(PAPER_ID, {"training": 1})
     counts = {c.id: c.issue_count_self for c in chart.concepts(PAPER_ID).values()}
     assert counts == {"attention": 0, "decoder-stack": 0, "training": 1}
+
+
+def test_conflicting_exact_values_are_left_to_the_judge(db: Database) -> None:
+    """A class default of 0.1 and a config default of 0.0 under one name isn't a literal match:
+    which one applies is the judge's call (seen on a real run: label smoothing)."""
+    from dataclasses import replace
+
+    ctx = make_ctx(db)
+    base = ctx.items[0]
+    ctx.items = [
+        *ctx.items,
+        replace(base, name="label_smoothing", value="0.1", source="default"),
+        replace(base, name="label_smoothing", value="0.0", source="config"),
+    ]
+    assert literal_check(ctx, claim("label smoothing", "0.1")) is None
+    only_one = make_ctx(db)
+    only_one.items = [*only_one.items, replace(base, name="label_smoothing", value="0.1")]
+    agreed = literal_check(only_one, claim("label smoothing", "0.1"))
+    assert agreed is not None and agreed.verdict == "matches"

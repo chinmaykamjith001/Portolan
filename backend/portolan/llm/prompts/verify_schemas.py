@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from portolan.llm.prompts.lenient import lenient, lenient_float
+from portolan.llm.prompts.lenient import ReplySchema, lenient, lenient_float
 
 VerdictLit = Literal["matches", "mismatch", "uncertain", "not_found"]
 SeverityLit = Literal["low", "medium"]
@@ -22,7 +22,7 @@ ClaimTypeOut = Literal[
 ]
 
 
-class ClaimOut(BaseModel):
+class ClaimOut(ReplySchema):
     anchor: str  # id of the passage the claim comes from, exactly as given
     claim_type: Annotated[ClaimTypeOut, lenient(ClaimTypeOut, "other")] = "other"
     subject: str  # what is being claimed about: "dropout rate", "number of encoder layers"
@@ -32,11 +32,11 @@ class ClaimOut(BaseModel):
     text: str  # one short paraphrase of the whole claim (at most 30 words)
 
 
-class ClaimsOut(BaseModel):
+class ClaimsOut(ReplySchema):
     claims: list[ClaimOut] = Field(default_factory=list[ClaimOut])
 
 
-class VerdictOut(BaseModel):
+class VerdictOut(ReplySchema):
     key: str  # the claim key from the input
     verdict: Annotated[VerdictLit, lenient(VerdictLit, "uncertain")]
     confidence: Annotated[float, lenient_float(0.5)]  # 0 to 1
@@ -47,11 +47,11 @@ class VerdictOut(BaseModel):
     end_line: int | None = None
 
 
-class JudgeOut(BaseModel):
+class JudgeOut(ReplySchema):
     verdicts: list[VerdictOut] = Field(default_factory=list[VerdictOut])
 
 
-class UndocumentedOut(BaseModel):
+class UndocumentedOut(ReplySchema):
     title: str  # "Gradient clipping at 1.0"
     evidence: str  # what the code does and why the paper's description doesn't cover it
     path: str
@@ -61,5 +61,5 @@ class UndocumentedOut(BaseModel):
     confidence: Annotated[float, lenient_float(0.5)]  # 0 to 1
 
 
-class ReverseOut(BaseModel):
+class ReverseOut(ReplySchema):
     items: list[UndocumentedOut] = Field(default_factory=list[UndocumentedOut])

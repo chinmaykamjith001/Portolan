@@ -120,6 +120,10 @@
               }
             },
             "required": [
+              "grounding",
+              "spans",
+              "notes",
+              "library_calls",
               "summary"
             ],
             "title": "GroundOut",
@@ -312,6 +316,10 @@
               }
             },
             "required": [
+              "grounding",
+              "spans",
+              "notes",
+              "library_calls",
               "summary"
             ],
             "title": "GroundOut",
