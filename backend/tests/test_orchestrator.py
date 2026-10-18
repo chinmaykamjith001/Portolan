@@ -462,3 +462,49 @@ async def test_publish_from_another_thread() -> None:
     got = await take(sub, 1)
     assert got[0].type == "finding_added"
     sub.close()
+
+
+async def test_a_p0_worker_serves_clicks_while_background_jobs_hold_the_others(
+    db: Database, stopper: list[JobQueue]
+) -> None:
+    queue = JobQueue(db, workers=2, p0_workers=1)
+    stopper.append(queue)
+    release = asyncio.Event()
+    clicked = asyncio.Event()
+
+    async def slow(_job: Job) -> None:
+        await release.wait()
+
+    async def click(_job: Job) -> None:
+        clicked.set()
+
+    queue.register("slow", slow)
+    queue.register("click", click)
+    await queue.start()
+    for i in range(3):  # more background work than regular workers
+        queue.submit("slow", f"slow:{i}", priority="P1")
+    await asyncio.sleep(0.05)
+    queue.submit("click", "click:1", priority="P0")
+    await asyncio.wait_for(clicked.wait(), timeout=2)  # didn't wait for any slow job
+    release.set()
+
+
+async def test_the_p0_worker_never_takes_background_work(
+    db: Database, stopper: list[JobQueue]
+) -> None:
+    queue = JobQueue(db, workers=1, p0_workers=1)
+    stopper.append(queue)
+    running: list[str] = []
+    release = asyncio.Event()
+
+    async def slow(job: Job) -> None:
+        running.append(job.key)
+        await release.wait()
+
+    queue.register("slow", slow)
+    await queue.start()
+    queue.submit("slow", "slow:a", priority="P1")
+    queue.submit("slow", "slow:b", priority="P2")
+    await asyncio.sleep(0.1)
+    assert running == ["slow:a"]  # the second waits for the regular worker
+    release.set()

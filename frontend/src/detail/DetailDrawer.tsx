@@ -106,7 +106,7 @@ export function DetailDrawer() {
     ...(payload?.details.graph || drawableGraph(graph.data) ? [{ id: "graph" as const, label: "Graph" }] : []),
   ];
   const activeTab: Tab = tabs.some((t) => t.id === tab) ? tab : "explain";
-  const canJump = Boolean(!onRoute && concept?.has_layer && !concept.is_first_principle && concept.id !== layer?.layer.center);
+  const canJump = Boolean(!onRoute && concept && !concept.is_first_principle && concept.id !== layer?.layer.center);
 
   // Move focus to the title when the drawer opens; while closed, nothing inside is focusable.
   const titleRef = useRef<HTMLHeadingElement>(null);

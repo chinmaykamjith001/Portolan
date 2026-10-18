@@ -8,10 +8,13 @@ import logging
 import os
 import shutil
 import signal
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
+from typing import IO
 
 from portolan.sandbox.check import check_source, imported_modules
 from portolan.sandbox.types import SandboxResult
@@ -35,6 +38,59 @@ ENV = {
     "MKL_NUM_THREADS": "1",
     "NUMEXPR_NUM_THREADS": "1",
 }
+
+# Windows Python cannot start without SYSTEMROOT (crypto/random init), and wants a temp dir.
+WINDOWS_STARTUP_GRACE = 5.0  # interpreter + numpy import under antivirus scanning, not user code
+
+
+def _child_env(work: str) -> dict[str, str]:
+    env = dict(ENV)
+    if not POSIX:
+        root = os.environ.get("SYSTEMROOT") or r"C:\Windows"  # case-insensitive on Windows
+        env.update(SYSTEMROOT=root, SystemRoot=root, PATH=os.path.join(root, "System32"))
+        env.update(TEMP=work, TMP=work)
+    return env
+
+
+def _run_blocking(
+    cmd: list[str], work: str, env: dict[str, str], wall: float
+) -> tuple[int | None, bytes, bytes, bool]:
+    """Same contract as the asyncio path, for event loops that can't spawn processes (the
+    selector loop uvicorn uses on Windows with --reload). Returns (code, stdout, stderr, timed_out);
+    stdout holds at most STDOUT_CAP + 1 bytes and the child is killed once it passes that."""
+    proc = subprocess.Popen(
+        cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        cwd=work, env=env,
+    )  # fmt: skip
+    out, err = bytearray(), bytearray()
+
+    def pump(stream: IO[bytes], buf: bytearray, cap: int, kill_on_overflow: bool) -> None:
+        while chunk := stream.read(65536):
+            room = cap - len(buf)
+            if room > 0:
+                buf.extend(chunk[:room])
+            if kill_on_overflow and len(buf) >= cap:
+                proc.kill()
+                return
+
+    assert proc.stdout is not None and proc.stderr is not None
+    readers = [
+        threading.Thread(target=pump, args=(proc.stdout, out, STDOUT_CAP + 1, True), daemon=True),
+        threading.Thread(target=pump, args=(proc.stderr, err, STDERR_CAP, False), daemon=True),
+    ]
+    for t in readers:
+        t.start()
+    timed_out = False
+    try:
+        proc.wait(timeout=wall)
+    except subprocess.TimeoutExpired:
+        timed_out = len(out) <= STDOUT_CAP
+        proc.kill()
+        proc.wait()
+    for t in readers:
+        t.join(timeout=2)
+    return proc.returncode, bytes(out), bytes(err), timed_out
+
 
 _net_prefix: list[str] | None = None
 _warned = False
@@ -121,6 +177,41 @@ async def run_program(source: str, *, timeout: float = 5.0, memory_mb: int = 256
     return await _execute(source, sorted(imported_modules(tree)), timeout, memory_mb, started)
 
 
+async def _run_async(
+    cmd: list[str], work: str, env: dict[str, str], wall: float
+) -> tuple[int | None, bytes, bytes, bool]:
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=work,
+        env=env,
+        start_new_session=POSIX,
+    )
+    assert proc.stdout is not None and proc.stderr is not None
+    overflow = asyncio.Event()
+    out_task = asyncio.ensure_future(_read_capped(proc.stdout, STDOUT_CAP + 1, overflow))
+    err_task = asyncio.ensure_future(_read_capped(proc.stderr, STDERR_CAP, None))
+    watch = asyncio.ensure_future(overflow.wait())
+    wait = asyncio.ensure_future(proc.wait())
+    timed_out = False
+    try:
+        await asyncio.wait({watch, wait}, timeout=wall, return_when=asyncio.FIRST_COMPLETED)
+        if not wait.done():
+            timed_out = not overflow.is_set()
+            _kill(proc)
+        await wait
+        out_raw, err_raw = await asyncio.gather(out_task, err_task)
+    finally:
+        _kill(proc)
+        watch.cancel()
+        for task in (out_task, err_task, wait):
+            if not task.done():
+                task.cancel()
+    return proc.returncode, out_raw, err_raw, timed_out
+
+
 async def _execute(
     source: str, modules: list[str], timeout: float, memory_mb: int, started: float
 ) -> SandboxResult:
@@ -140,42 +231,29 @@ async def _execute(
         prefix = await _network_prefix() if POSIX else []
         mods = ",".join(modules)
         cpu_s = int(timeout) + 2
-        proc = await asyncio.create_subprocess_exec(
-            *prefix, sys.executable, "-I", str(CHILD),
-            str(script), str(memory_mb), str(cpu_s), mods,
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=work,
-            env=ENV,
-            start_new_session=POSIX,
-        )  # fmt: skip
-        assert proc.stdout is not None and proc.stderr is not None
-        overflow = asyncio.Event()
-        out_task = asyncio.ensure_future(_read_capped(proc.stdout, STDOUT_CAP + 1, overflow))
-        err_task = asyncio.ensure_future(_read_capped(proc.stderr, STDERR_CAP, None))
-        watch = asyncio.ensure_future(overflow.wait())
-        wait = asyncio.ensure_future(proc.wait())
-        timed_out = False
+        cmd = [
+            *prefix,
+            sys.executable,
+            "-I",
+            str(CHILD),
+            str(script),
+            str(memory_mb),
+            str(cpu_s),
+            mods,
+        ]
+        env = _child_env(work)
+        wall = timeout if POSIX else timeout + WINDOWS_STARTUP_GRACE
         try:
-            await asyncio.wait({watch, wait}, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
-            if not wait.done():
-                timed_out = not overflow.is_set()
-                _kill(proc)
-            await wait
-            out_raw, err_raw = await asyncio.gather(out_task, err_task)
-        finally:
-            _kill(proc)
-            watch.cancel()
-            for task in (out_task, err_task, wait):
-                if not task.done():
-                    task.cancel()
+            code, out_raw, err_raw, timed_out = await _run_async(cmd, work, env, wall)
+        except NotImplementedError:  # this event loop can't spawn subprocesses
+            code, out_raw, err_raw, timed_out = await asyncio.to_thread(
+                _run_blocking, cmd, work, env, wall
+            )
 
-        text = out_raw[:STDOUT_CAP].decode("utf-8", errors="replace")
+        text = out_raw[:STDOUT_CAP].decode("utf-8", errors="replace").replace("\r\n", "\n")
         too_long = len(out_raw) > STDOUT_CAP
         err = err_raw.decode("utf-8", errors="replace")
         elapsed = time.monotonic() - started
-        code = proc.returncode
         cpu_killed = POSIX and code == -signal.SIGXCPU
         if timed_out or cpu_killed:
             unit = "second" if timeout == 1 else "seconds"

@@ -125,6 +125,11 @@ class Services:
             ref = PaperRef.model_validate(job.payload["ref"])
             pdf_url = job.payload.get("pdf_url")
             doc = (await ingest_ref(ref, self.http, self.db, pdf_url=pdf_url)).doc
+            if doc.paper_id != paper_id:
+                # The version was unknown when the id was handed out ("arxiv:X", now "arxiv:Xv2"):
+                # keep the id the browser holds, or the page would wait for it forever.
+                doc = doc.model_copy(update={"paper_id": paper_id})
+                save_paper(self.db, doc)
         self.progress(paper_id, "reading", 25, f"Read {len(doc.anchors)} parts of the paper")
         self.queue.submit(
             "chart_master", f"chart_master:{paper_id}", priority="P0", paper_id=paper_id
@@ -158,8 +163,9 @@ class Services:
             paper_id, "finding_code", 50, "Code ready" if ok else "Couldn't download the code"
         )
         # Verification and the FAQ are background work (P2); the Chart never waits for them.
+        # `force`: this job runs again only when the paper's code changed, so recheck everything.
         kind = "verify" if ok else "faq"
-        self.queue.submit(kind, f"{kind}:{paper_id}", priority="P2", paper_id=paper_id)
+        self.queue.submit(kind, f"{kind}:{paper_id}", priority="P2", paper_id=paper_id, force=True)
 
     async def _chart_master(self, job: Job) -> None:
         paper_id = str(job.paper_id)
@@ -202,6 +208,9 @@ class Services:
             self.bus.publish(
                 paper_id, "layer_ready", {"layer_id": layer.id, "concepts": len(layer.concepts)}
             )
+        if self.chart.get_layer(paper_id, concept_id) is None:
+            # Finishing "done" with no layer would leave the page waiting forever: fail visibly.
+            raise RuntimeError("the model's answer had no usable layer for this idea")
         self.queue.submit(
             "frontier", f"frontier:{paper_id}:{concept_id}", {"layer_id": concept_id},
             priority="P1", paper_id=paper_id, front=True,
@@ -302,7 +311,7 @@ class Services:
 
         await verify_paper(doc, self.gateway, self.chart, self.db, on_finding)
         self.bus.publish(paper_id, "finding_added", {"finding_id": None, "concept_ids": []})
-        self.queue.submit("faq", f"faq:{paper_id}", priority="P2", paper_id=paper_id)
+        self.queue.submit("faq", f"faq:{paper_id}", priority="P2", paper_id=paper_id, force=True)
 
     async def _faq(self, job: Job) -> None:
         paper_id = str(job.paper_id)

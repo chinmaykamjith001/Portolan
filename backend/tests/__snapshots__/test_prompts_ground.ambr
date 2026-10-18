@@ -84,6 +84,7 @@
             },
             "properties": {
               "grounding": {
+                "default": "concept_only",
                 "enum": [
                   "in_code",
                   "in_library",
@@ -119,7 +120,6 @@
               }
             },
             "required": [
-              "grounding",
               "summary"
             ],
             "title": "GroundOut",
@@ -276,6 +276,7 @@
             },
             "properties": {
               "grounding": {
+                "default": "concept_only",
                 "enum": [
                   "in_code",
                   "in_library",
@@ -311,7 +312,6 @@
               }
             },
             "required": [
-              "grounding",
               "summary"
             ],
             "title": "GroundOut",

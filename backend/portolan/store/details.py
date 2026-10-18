@@ -48,6 +48,10 @@ class DetailStore:
             (paper_id, g.concept_id, g.model_dump_json(), datetime.now(UTC).isoformat()),
         )
 
+    def delete_groundings(self, paper_id: str) -> None:
+        """Forget code notes (the paper's code changed)."""
+        self.db.execute("DELETE FROM code_groundings WHERE paper_id = ?", (paper_id,))
+
     def grounding(self, paper_id: str, concept_id: str) -> CodeGrounding | None:
         row = self.db.fetchone(
             "SELECT grounding_json FROM code_groundings WHERE paper_id = ? AND concept_id = ?",

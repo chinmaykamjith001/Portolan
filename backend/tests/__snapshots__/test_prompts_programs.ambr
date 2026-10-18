@@ -28,6 +28,7 @@
               "type": "string"
             },
             "source_label": {
+              "default": "generic",
               "enum": [
                 "generic",
                 "paper_notation"
@@ -54,7 +55,6 @@
           },
           "required": [
             "caption",
-            "source_label",
             "program"
           ],
           "title": "ExampleOut",
@@ -132,6 +132,7 @@
               "type": "string"
             },
             "source_label": {
+              "default": "generic",
               "enum": [
                 "generic",
                 "paper_notation"
@@ -158,7 +159,6 @@
           },
           "required": [
             "caption",
-            "source_label",
             "program"
           ],
           "title": "ExampleOut",

@@ -193,6 +193,7 @@
                     "type": "string"
                   },
                   "claim_type": {
+                    "default": "other",
                     "enum": [
                       "hyperparameter",
                       "architecture",
@@ -228,7 +229,6 @@
                 },
                 "required": [
                   "anchor",
-                  "claim_type",
                   "subject",
                   "text"
                 ],
@@ -335,6 +335,7 @@
                     "type": "integer"
                   },
                   "severity": {
+                    "default": "low",
                     "enum": [
                       "low",
                       "medium"
@@ -353,7 +354,6 @@
                   "path",
                   "start_line",
                   "end_line",
-                  "severity",
                   "confidence"
                 ],
                 "title": "UndocumentedOut",

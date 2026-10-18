@@ -189,8 +189,6 @@
               "items": {
                 "$ref": "#/$defs/ConceptOut"
               },
-              "maxItems": 20,
-              "minItems": 10,
               "title": "Concepts",
               "type": "array"
             },
@@ -431,8 +429,6 @@
                   "items": {
                     "$ref": "#/$defs/ConceptOut"
                   },
-                  "maxItems": 10,
-                  "minItems": 4,
                   "title": "Concepts",
                   "type": "array"
                 },

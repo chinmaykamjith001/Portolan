@@ -210,10 +210,8 @@ def test_number_guard_rounding_is_one_way() -> None:
 
 
 async def test_real_sandbox_end_to_end(db: Database) -> None:
-    try:
-        await run_program("print(1)")
-    except NotImplementedError:
-        pytest.skip("sandbox not implemented yet")
+    probe = await run_program("print(1)")
+    assert probe.ok, f"the sandbox itself fails on this machine: {probe.error}"
     provider = ScriptedProvider([llm()])
     ex = await build(db, provider)
     assert ex.rows == TABLE["rows"]  # computed by really running PROGRAM

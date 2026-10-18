@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 import os
 from pathlib import Path
 
@@ -11,6 +12,12 @@ from starlette.exceptions import HTTPException
 from starlette.staticfiles import StaticFiles
 
 from portolan.config import repo_root
+
+# Windows takes MIME types from the registry, where .js is sometimes text/plain: browsers then
+# refuse to run the app's module scripts.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("image/svg+xml", ".svg")
 
 STATIC_ENV = "PORTOLAN_STATIC_DIR"
 

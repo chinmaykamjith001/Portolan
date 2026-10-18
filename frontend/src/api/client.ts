@@ -62,7 +62,8 @@ export const api = {
     form.append("file", file);
     return request<CreatePaperResult>("/papers", { method: "POST", body: form }, true);
   },
-  paper: (paperId: string) => request<PaperInfo>(`/papers/${enc(paperId)}`),
+  // A 202 here still says something: which steps are running and which failed.
+  paper: (paperId: string) => request<PaperInfo>(`/papers/${enc(paperId)}`, undefined, true),
   master: (paperId: string) => request<LayerPayload>(`/papers/${enc(paperId)}/chart/master`),
   layer: (paperId: string, conceptId: string) =>
     request<LayerPayload>(`/papers/${enc(paperId)}/chart/layers/${enc(conceptId)}`),

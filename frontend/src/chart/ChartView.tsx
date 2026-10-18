@@ -28,6 +28,7 @@ import {
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
+import { ApiError } from "../api/client";
 import { useLayer } from "../api/hooks";
 import type { LayerPayload } from "../api/types";
 import { Button } from "../design/primitives";
@@ -517,7 +518,7 @@ export default function ChartView() {
   if (query.isError) {
     status = (
       <>
-        Couldn&apos;t load this part of the map.{" "}
+        {query.error instanceof ApiError ? query.error.message : "Couldn't load this part of the map."}{" "}
         <button type="button" className={styles.textButton} onClick={() => void query.refetch()}>
           Try again
         </button>

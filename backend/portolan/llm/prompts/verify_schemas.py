@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
+
+from portolan.llm.prompts.lenient import lenient, lenient_float
+
+VerdictLit = Literal["matches", "mismatch", "uncertain", "not_found"]
+SeverityLit = Literal["low", "medium"]
 
 ClaimTypeOut = Literal[
     "hyperparameter",
@@ -19,7 +24,7 @@ ClaimTypeOut = Literal[
 
 class ClaimOut(BaseModel):
     anchor: str  # id of the passage the claim comes from, exactly as given
-    claim_type: ClaimTypeOut
+    claim_type: Annotated[ClaimTypeOut, lenient(ClaimTypeOut, "other")] = "other"
     subject: str  # what is being claimed about: "dropout rate", "number of encoder layers"
     value: str | None = (
         None  # the value as the paper writes it: "0.1", "6", "10%"; None if not numeric
@@ -33,8 +38,8 @@ class ClaimsOut(BaseModel):
 
 class VerdictOut(BaseModel):
     key: str  # the claim key from the input
-    verdict: Literal["matches", "mismatch", "uncertain", "not_found"]
-    confidence: float  # 0 to 1
+    verdict: Annotated[VerdictLit, lenient(VerdictLit, "uncertain")]
+    confidence: Annotated[float, lenient_float(0.5)]  # 0 to 1
     paper_side: str  # what the paper says, in a few words
     code_side: str  # what the code does, in a few words, naming the file
     path: str | None = None  # the file the evidence is in, exactly as shown
@@ -52,8 +57,8 @@ class UndocumentedOut(BaseModel):
     path: str
     start_line: int
     end_line: int
-    severity: Literal["low", "medium"]
-    confidence: float  # 0 to 1
+    severity: Annotated[SeverityLit, lenient(SeverityLit, "low")] = "low"
+    confidence: Annotated[float, lenient_float(0.5)]  # 0 to 1
 
 
 class ReverseOut(BaseModel):

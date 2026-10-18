@@ -79,6 +79,8 @@ export interface PaperInfo {
   repo?: RepoCandidate | null;
   chart_ready?: boolean;
   jobs?: Record<string, string>;
+  /** Failed background steps by kind, each a plain-language reason. */
+  failures?: Record<string, string>;
 }
 
 export interface TitleCandidate {

@@ -13,8 +13,9 @@ function unwrap<T>(m: Maybe<T>): T | null {
   return m.pending ? null : m.data;
 }
 
-function pendingRefetch(data: unknown): number | false {
-  return data === null ? PENDING_RETRY_MS : false;
+/** Poll while the backend says "generating"; never after an error (only "Try again" retries). */
+function pendingRefetch(data: unknown, status?: string): number | false {
+  return status !== "error" && data === null ? PENDING_RETRY_MS : false;
 }
 
 export function usePaper(paperId: string | null) {
@@ -22,7 +23,14 @@ export function usePaper(paperId: string | null) {
     queryKey: keys.paper(paperId ?? ""),
     queryFn: async () => unwrap(await api.paper(paperId ?? "")),
     enabled: paperId !== null,
-    refetchInterval: (q) => pendingRefetch(q.state.data),
+    // Until the map exists (or a step has failed) keep checking: it is a cheap database read.
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (q.state.status === "error" || !d) return d === null ? PENDING_RETRY_MS : false;
+      if (Object.keys(d.failures ?? {}).length > 0) return false;
+      const running = Object.values(d.jobs ?? {}).some((state) => state === "queued" || state === "running");
+      return d.status === "processing" || !d.chart_ready || running ? PENDING_RETRY_MS : false;
+    },
   });
 }
 
@@ -33,7 +41,7 @@ export function useLayer(paperId: string | null, layerId: string) {
       unwrap(await (layerId === "master" ? api.master(paperId ?? "") : api.layer(paperId ?? "", layerId))),
     enabled: paperId !== null,
     staleTime: Infinity,
-    refetchInterval: (q) => pendingRefetch(q.state.data),
+    refetchInterval: (q) => pendingRefetch(q.state.data, q.state.status),
   });
 }
 
@@ -51,7 +59,7 @@ export function useExplanation(paperId: string | null, conceptId: string | null,
     queryFn: async () => unwrap(await api.explanation(paperId ?? "", conceptId ?? "", angle)),
     enabled: paperId !== null && conceptId !== null,
     staleTime: Infinity,
-    refetchInterval: (q) => pendingRefetch(q.state.data),
+    refetchInterval: (q) => pendingRefetch(q.state.data, q.state.status),
   });
 }
 
@@ -61,7 +69,7 @@ export function useEdge(paperId: string | null, linkId: string | null) {
     queryFn: async () => unwrap(await api.edge(paperId ?? "", linkId ?? "")),
     enabled: paperId !== null && linkId !== null,
     staleTime: Infinity,
-    refetchInterval: (q) => pendingRefetch(q.state.data),
+    refetchInterval: (q) => pendingRefetch(q.state.data, q.state.status),
   });
 }
 
@@ -71,7 +79,7 @@ export function useCode(paperId: string | null, conceptId: string | null) {
     queryFn: async () => unwrap(await api.code(paperId ?? "", conceptId ?? "")),
     enabled: paperId !== null && conceptId !== null,
     staleTime: Infinity,
-    refetchInterval: (q) => pendingRefetch(q.state.data),
+    refetchInterval: (q) => pendingRefetch(q.state.data, q.state.status),
   });
 }
 
@@ -81,7 +89,7 @@ export function useExample(paperId: string | null, conceptId: string | null, var
     queryFn: async () => unwrap(await api.example(paperId ?? "", conceptId ?? "", variant)),
     enabled: paperId !== null && conceptId !== null,
     staleTime: Infinity,
-    refetchInterval: (q) => pendingRefetch(q.state.data),
+    refetchInterval: (q) => pendingRefetch(q.state.data, q.state.status),
   });
 }
 
@@ -91,7 +99,7 @@ export function useGraph(paperId: string | null, conceptId: string | null, enabl
     queryFn: async () => unwrap(await api.graph(paperId ?? "", conceptId ?? "")),
     enabled: enabled && paperId !== null && conceptId !== null,
     staleTime: Infinity,
-    refetchInterval: (q) => pendingRefetch(q.state.data),
+    refetchInterval: (q) => pendingRefetch(q.state.data, q.state.status),
   });
 }
 
@@ -102,7 +110,7 @@ export function useRoute(paperId: string | null, routeId: string) {
       unwrap(await (routeId === "main" ? api.routeMain(paperId ?? "") : api.routeSub(paperId ?? "", routeId))),
     enabled: paperId !== null,
     staleTime: Infinity,
-    refetchInterval: (q) => pendingRefetch(q.state.data),
+    refetchInterval: (q) => pendingRefetch(q.state.data, q.state.status),
   });
 }
 
@@ -119,7 +127,7 @@ export function useFaq(paperId: string | null, enabled = true) {
     queryKey: keys.faq(paperId ?? ""),
     queryFn: async () => unwrap(await api.faq(paperId ?? "")),
     enabled: enabled && paperId !== null,
-    refetchInterval: (q) => pendingRefetch(q.state.data),
+    refetchInterval: (q) => pendingRefetch(q.state.data, q.state.status),
   });
 }
 
@@ -172,8 +180,10 @@ export function usePaperEvents(paperId: string | null): LiveState {
   const [state, setState] = useState<LiveState>({ progress: null, rateLimitedUntil: null, lastError: null });
 
   useEffect(() => {
+    setState({ progress: null, rateLimitedUntil: null, lastError: null }); // a new paper starts clean
     if (paperId === null || typeof EventSource === "undefined") return;
     const source = new EventSource(eventsUrl(paperId));
+    const recovered = () => setState((s) => (s.lastError === null ? s : { ...s, lastError: null }));
     const parse = (e: MessageEvent<string>): Record<string, unknown> => {
       try {
         return JSON.parse(e.data) as Record<string, unknown>;
@@ -190,12 +200,16 @@ export function usePaperEvents(paperId: string | null): LiveState {
     });
     source.addEventListener("layer_ready", (e) => {
       const data = parse(e as MessageEvent<string>);
+      recovered();
       void qc.invalidateQueries({ queryKey: keys.layer(paperId, String(data.layer_id)) });
+      // The parent layer's payload says whether this child can be jumped into: refresh visible ones.
+      void qc.invalidateQueries({ queryKey: ["layer", paperId], refetchType: "active" });
       void qc.invalidateQueries({ queryKey: keys.paper(paperId) });
       void qc.invalidateQueries({ queryKey: ["concept", paperId] });
     });
     source.addEventListener("detail_ready", (e) => {
       const data = parse(e as MessageEvent<string>);
+      recovered();
       if (data.part === "edge") {
         void qc.invalidateQueries({ queryKey: keys.edge(paperId, String(data.link_id)) });
       } else if (data.part === "code" || data.part === "example" || data.part === "graph") {
@@ -209,6 +223,7 @@ export function usePaperEvents(paperId: string | null): LiveState {
     });
     source.addEventListener("route_ready", (e) => {
       const data = parse(e as MessageEvent<string>);
+      recovered();
       void qc.invalidateQueries({ queryKey: keys.route(paperId, String(data.route_id)) });
     });
     source.addEventListener("finding_added", () => {
@@ -227,6 +242,7 @@ export function usePaperEvents(paperId: string | null): LiveState {
     source.addEventListener("error", (e) => {
       const msg = (e as MessageEvent<string>).data;
       if (typeof msg === "string" && msg) {
+        void qc.invalidateQueries({ queryKey: keys.paper(paperId) }); // a job failed: show why
         const data = parse(e as MessageEvent<string>);
         setState((s) => ({ ...s, lastError: String(data.message ?? "Something went wrong.") }));
       }

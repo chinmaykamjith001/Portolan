@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from portolan.api.jobs import submit_or_report
 from portolan.api.papers import error, services
 from portolan.detail.explain import DetailError
 from portolan.faq.build import answer_question
@@ -29,8 +30,7 @@ def faq(paper_id: str, request: Request) -> JSONResponse:
     job = svc.queue.get(key)
     if items or (job is not None and job.state == "done"):
         return JSONResponse({"items": [i.model_dump(mode="json") for i in items]})
-    svc.queue.submit("faq", key, priority="P1", paper_id=paper_id)
-    return JSONResponse({"status": "generating"}, status_code=202)
+    return submit_or_report(svc, "faq", key, priority="P1", paper_id=paper_id)
 
 
 @router.post("/papers/{paper_id}/ask")

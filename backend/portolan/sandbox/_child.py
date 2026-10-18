@@ -124,6 +124,11 @@ def main() -> None:
         int(sys.argv[3]),
         sys.argv[4],
     )
+    # -I ignores PYTHONIOENCODING; Windows stdout is cp1252 and chokes on Greek letters, symbols.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
     tmp_dir = os.path.dirname(source_path)
     with open(source_path, encoding="utf-8") as f:
         source = f.read()

@@ -12,11 +12,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
 from starlette.datastructures import UploadFile
 
+from portolan.api.jobs import failures, not_ingested, submit_or_report
 from portolan.api.services import Services, describe_concepts, findings_index
 from portolan.chart.issues import issues_inside
 from portolan.ingest.arxiv import fetch_metadata
 from portolan.ingest.http import FetchError
-from portolan.ingest.pipeline import upload_paper_id
+from portolan.ingest.pipeline import arxiv_paper_id, doi_paper_id, upload_paper_id
 from portolan.ingest.resolver import resolve
 from portolan.models.concept import MASTER
 from portolan.orchestrator.events import format_sse, heartbeat
@@ -72,13 +73,16 @@ async def create_paper(request: Request) -> JSONResponse:
         )
     ref = result.ref
     if ref.arxiv_id and ref.version is None:
-        meta = await fetch_metadata(svc.http, ref.arxiv_id, None)
+        try:
+            meta = await fetch_metadata(svc.http, ref.arxiv_id, None)
+        except Exception:  # arXiv down or odd reply: ingestion finds the version itself
+            meta = None
         if meta is not None:
             ref = ref.model_copy(update={"version": meta.version, "title": meta.title})
     if ref.arxiv_id:
-        paper_id = f"arxiv:{ref.arxiv_id}{ref.version or ''}"
+        paper_id = arxiv_paper_id(f"{ref.arxiv_id}{ref.version or ''}")
     elif ref.doi:
-        paper_id = f"doi:{ref.doi.lower()}"
+        paper_id = doi_paper_id(ref.doi)
     else:
         return error(400, "unrecognized_input", "Paste an arXiv link, DOI, PDF or title.")
 
@@ -142,7 +146,15 @@ def get_paper(paper_id: str, request: Request) -> JSONResponse:
     jobs = svc.job_states(paper_id)
     if doc is None:
         if jobs:
-            return JSONResponse({"paper_id": paper_id, "status": "processing", "jobs": jobs}, 202)
+            return JSONResponse(
+                {
+                    "paper_id": paper_id,
+                    "status": "processing",
+                    "jobs": jobs,
+                    "failures": failures(svc, paper_id),
+                },
+                202,
+            )
         return error(404, "not_found", "Portolan hasn't seen this paper yet. Paste it first.")
     stored = load_candidates(svc.db, paper_id)
     repo = chosen_repo(svc.db, paper_id)
@@ -160,6 +172,7 @@ def get_paper(paper_id: str, request: Request) -> JSONResponse:
             "repo": repo.model_dump(mode="json") if repo else None,
             "chart_ready": svc.chart.get_layer(paper_id, MASTER) is not None,
             "jobs": jobs,
+            "failures": failures(svc, paper_id),
         }
     )
 
@@ -222,18 +235,24 @@ def chart_master(paper_id: str, request: Request) -> JSONResponse:
     payload = _layer_payload(svc, paper_id, MASTER)
     if payload is not None:
         return JSONResponse(payload)
-    if svc.paper(paper_id) is None and not svc.job_states(paper_id):
-        return error(404, "not_found", "Portolan hasn't seen this paper yet. Paste it first.")
-    svc.queue.submit("chart_master", f"chart_master:{paper_id}", priority="P0", paper_id=paper_id)
-    return JSONResponse({"status": "generating"}, status_code=202)
+    if (waiting := not_ingested(svc, paper_id)) is not None:
+        return waiting
+    return submit_or_report(
+        svc, "chart_master", f"chart_master:{paper_id}", priority="P0", paper_id=paper_id
+    )
 
 
 @router.get("/papers/{paper_id}/chart/layers/{concept_id}")
 def chart_layer(paper_id: str, concept_id: str, request: Request) -> JSONResponse:
     svc = services(request)
-    if svc.chart.get_concept(paper_id, concept_id) is None:
+    concept = svc.chart.get_concept(paper_id, concept_id)
+    if concept is None:
         return error(404, "not_found", "That concept isn't on this paper's map.")
     payload = _layer_payload(svc, paper_id, concept_id)
+    if payload is None and (
+        concept.is_first_principle or concept.depth >= svc.config.generation.max_depth
+    ):
+        return error(404, "no_layer", "This is a first principle: there is nothing further inside.")
     if payload is not None:
         # Looking at this layer: keep two levels below it ready (spec §10.5.2), ahead of other P1.
         svc.queue.submit(
@@ -241,11 +260,10 @@ def chart_layer(paper_id: str, concept_id: str, request: Request) -> JSONRespons
             priority="P1", paper_id=paper_id, front=True,
         )  # fmt: skip
         return JSONResponse(payload)
-    svc.queue.submit(
-        "skeleton", f"skeleton:{paper_id}:{concept_id}", {"concept_id": concept_id},
+    return submit_or_report(
+        svc, "skeleton", f"skeleton:{paper_id}:{concept_id}", {"concept_id": concept_id},
         priority="P0", paper_id=paper_id,
     )  # fmt: skip
-    return JSONResponse({"status": "generating"}, status_code=202)
 
 
 @router.get("/papers/{paper_id}/concepts/{concept_id}")
@@ -289,14 +307,10 @@ def explanation(
     if stored is not None:
         return JSONResponse(stored.model_dump(mode="json"))
     key = f"explain:{paper_id}:{concept_id}:{angle}"
-    svc.queue.submit(
-        "explain", key, {"concept_id": concept_id, "angle": angle},
+    return submit_or_report(
+        svc, "explain", key, {"concept_id": concept_id, "angle": angle},
         priority="P0", paper_id=paper_id,
     )  # fmt: skip
-    job = svc.queue.get(key)
-    if job is not None and job.state == "failed":
-        return error(502, "generation_failed", "Couldn't write this explanation. Try again.")
-    return JSONResponse({"status": "generating"}, status_code=202)
 
 
 @router.get("/papers/{paper_id}/links/{link_id}/explanation")
@@ -309,11 +323,10 @@ def edge_explanation(paper_id: str, link_id: str, request: Request) -> JSONRespo
     stored = svc.details.edge(paper_id, link_id)
     if stored is not None:
         return JSONResponse(stored.model_dump(mode="json"))
-    svc.queue.submit(
-        "edge", f"edge:{paper_id}:{link_id}", {"link_id": link_id},
+    return submit_or_report(
+        svc, "edge", f"edge:{paper_id}:{link_id}", {"link_id": link_id},
         priority="P0", paper_id=paper_id,
     )  # fmt: skip
-    return JSONResponse({"status": "generating"}, status_code=202)
 
 
 def _concept_or_404(svc: Services, paper_id: str, concept_id: str) -> JSONResponse | None:
@@ -330,11 +343,7 @@ def _generating(
     payload: dict[str, Any],
     priority: Literal["P0", "P1"] = "P0",
 ) -> JSONResponse:
-    svc.queue.submit(kind, key, payload, priority=priority, paper_id=paper_id)
-    job = svc.queue.get(key)
-    if job is not None and job.state == "failed":
-        return error(502, "generation_failed", "Couldn't write this part. Try again.")
-    return JSONResponse({"status": "generating"}, status_code=202)
+    return submit_or_report(svc, kind, key, payload, priority=priority, paper_id=paper_id)
 
 
 @router.get("/papers/{paper_id}/concepts/{concept_id}/code")

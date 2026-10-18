@@ -118,7 +118,8 @@ export const useUI = create<UIState>((set, get) => ({
     }),
   clearCameFromStop: () => set({ cameFromStop: null }),
   setFindingsOpen: (findingsOpen) => set({ findingsOpen }),
-  focusConcept: (conceptId, view) => set({ view, pendingFocus: { conceptId, view }, edge: null }),
+  focusConcept: (conceptId, view) =>
+    set({ view, pendingFocus: { conceptId, view }, edge: null, drawerOpen: false }),
   clearFocus: () => set({ pendingFocus: null }),
   setPaper: (paperId) =>
     set({
@@ -167,6 +168,6 @@ export const useUI = create<UIState>((set, get) => ({
     else if (s.edge) set({ edge: null });
     else if (s.drawerOpen) set({ drawerOpen: false });
     else if (s.view === "route") s.routeBack();
-    else s.back();
+    else if (s.view === "chart") s.back();
   },
 }));

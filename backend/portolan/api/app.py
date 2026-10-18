@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,6 +16,7 @@ from portolan import __version__
 from portolan.api.faq_api import router as faq_router
 from portolan.api.findings_api import router as findings_router
 from portolan.api.papers import router as papers_router
+from portolan.api.repo_api import router as repo_router
 from portolan.api.route_api import router as route_router
 from portolan.api.services import Services
 from portolan.api.settings_api import router as settings_router
@@ -22,6 +24,7 @@ from portolan.api.static import mount_frontend, static_dir_from_env
 from portolan.config import Config, api_key_present, load_config
 from portolan.ingest.http import PoliteClient
 from portolan.llm.gateway import init_gateway
+from portolan.llm.ratelimit import pacific_day
 from portolan.orchestrator.events import EventBus
 from portolan.orchestrator.queue import JobQueue
 from portolan.store.chart import ChartStore
@@ -42,12 +45,22 @@ def build_services(config: Config) -> Services:
         gateway=init_gateway(config, db),
         http=PoliteClient(db, contact=config.http.contact),
         bus=bus,
-        queue=JobQueue(db, bus=bus, workers=2),
+        queue=JobQueue(db, bus=bus, workers=2, p0_workers=1),
         chart=ChartStore(db),
         details=DetailStore(db),
     )
     svc.gateway.on_event = svc.on_gateway_event
     return svc
+
+
+async def _resume_on_new_day(svc: Services, every_seconds: float = 60.0) -> None:
+    """The free-tier budget resets at midnight US Pacific: un-park paused jobs then."""
+    day = pacific_day()
+    while True:
+        await asyncio.sleep(every_seconds)
+        if (now := pacific_day()) != day:
+            day = now
+            svc.queue.resume_jobs()
 
 
 def create_app(
@@ -63,9 +76,12 @@ def create_app(
         svc.register_handlers()
         app.state.services = svc
         await svc.queue.start()
+        svc.queue.resume_jobs()  # jobs paused by a used-up daily budget on an earlier run
+        watcher = asyncio.create_task(_resume_on_new_day(svc))
         try:
             yield
         finally:
+            watcher.cancel()
             await svc.queue.stop()
             if services is None:
                 await svc.http.aclose()
@@ -74,6 +90,7 @@ def create_app(
     app = FastAPI(title="Portolan", version=__version__, lifespan=lifespan)
     app.include_router(papers_router)
     app.include_router(route_router)
+    app.include_router(repo_router)
     app.include_router(findings_router)
     app.include_router(faq_router)
     app.include_router(settings_router)

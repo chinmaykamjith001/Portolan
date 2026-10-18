@@ -13,7 +13,7 @@ const STAGES = [
 
 function Progress({ live, paper }: { live: LiveState; paper: PaperInfo | null | undefined }) {
   const stage = live.progress?.stage;
-  if (paper?.chart_ready && (!stage || live.progress?.percent === 100)) return null;
+  if (paper?.chart_ready) return null; // later stages (code, findings) report in their own places
   const now = STAGES.findIndex((s) => s.id === stage);
   return (
     <span className={styles.progress} aria-live="polite">
@@ -33,6 +33,7 @@ export function PaperStrip({ paper, live }: { paper: PaperInfo | null | undefine
   const waiting = live.rateLimitedUntil !== null && live.rateLimitedUntil > Date.now();
   const seconds = waiting ? Math.ceil(((live.rateLimitedUntil ?? 0) - Date.now()) / 1000) : 0;
   const authors = paper?.authors ?? [];
+  const failure = Object.values(paper?.failures ?? {})[0];
   return (
     <section className={styles.strip} aria-label="Paper">
       <h1 className={styles.title}>{paper?.title ?? "Reading paper…"}</h1>
@@ -69,7 +70,7 @@ export function PaperStrip({ paper, live }: { paper: PaperInfo | null | undefine
           {waiting ? `Waiting for the free-tier rate limit (~${seconds} s)` : ""}
         </span>
         <span className={styles.notice} role="alert">
-          {live.lastError ?? ""}
+          {live.lastError ?? failure ?? ""}
         </span>
       </div>
     </section>

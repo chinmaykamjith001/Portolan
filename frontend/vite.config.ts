@@ -14,6 +14,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./tests/setup.ts"],
+    testTimeout: 20_000, // React Flow + ELK in jsdom is slow on some laptops (Windows)
     exclude: [...configDefaults.exclude, "e2e/**"], // Playwright specs
     css: { modules: { classNameStrategy: "non-scoped" } },
   },

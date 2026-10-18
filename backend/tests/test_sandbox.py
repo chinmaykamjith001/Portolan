@@ -171,8 +171,10 @@ async def test_child_rejects_unlisted_imports_at_runtime() -> None:
     assert result.error == "The example tried to use `os`, which isn't allowed."
 
 
-async def test_child_blocks_file_reads_even_through_numpy() -> None:
-    result = await unchecked("import numpy as np\nnp.loadtxt('/etc/passwd')", ["numpy"])
+async def test_child_blocks_file_reads_even_through_numpy(tmp_path: Path) -> None:
+    secret = tmp_path / "secret.txt"  # a real file outside the sandbox, on any OS
+    secret.write_text("1 2 3\n", encoding="utf-8")
+    result = await unchecked(f"import numpy as np\nnp.loadtxt({str(secret)!r})", ["numpy"])
     assert not result.ok
     assert "files or other programs" in (result.error or "")
 
@@ -256,12 +258,19 @@ async def test_sleep_style_busy_wait_in_numpy_times_out() -> None:
     assert "longer than 1.5 seconds" in (result.error or "")
 
 
+NO_RLIMIT = pytest.mark.skipif(
+    os.name != "posix", reason="memory limits need RLIMIT_AS (POSIX); Windows has the timeout only"
+)
+
+
+@NO_RLIMIT
 async def test_memory_bomb_fails_cleanly() -> None:
     result = await run_program("x = [0] * 10**9", memory_mb=128)
     assert not result.ok
     assert result.error == "The example needed more than 128 MB of memory."
 
 
+@NO_RLIMIT
 async def test_numpy_memory_bomb_fails_cleanly() -> None:
     result = await run_program("import numpy as np\nx = np.ones((20000, 20000))", memory_mb=128)
     assert not result.ok
@@ -306,6 +315,7 @@ async def test_parallel_runs_do_not_interfere() -> None:
     assert [r.output for r in results] == [{"n": i} for i in range(8)]
 
 
+@pytest.mark.skipif(not Path("/proc").is_dir(), reason="process listing via /proc (Linux)")
 async def test_a_timed_out_run_leaves_no_process_behind() -> None:
     result = await run_program("while True: pass", timeout=0.5)
     assert not result.ok
@@ -361,3 +371,38 @@ async def test_network_namespace_is_used_when_available() -> None:
     # Where `unshare -n` works the child gets an empty network namespace; elsewhere the import
     # allowlist and the audit hook are what stop sockets, and a warning is logged once.
     assert prefix == [] or prefix[-1] == "--"
+
+
+# -- the thread fallback (event loops that can't spawn subprocesses, e.g. Windows + --reload) --
+
+
+@pytest.fixture
+def no_async_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def refuse(*_args: object, **_kwargs: object) -> object:
+        raise NotImplementedError
+
+    monkeypatch.setattr(runner, "_run_async", refuse)
+
+
+@pytest.mark.usefixtures("no_async_subprocess")
+async def test_fallback_runs_and_parses() -> None:
+    res = await run_program(TABLE)
+    assert res.ok, res.error
+    assert isinstance(res.output, dict) and res.output["columns"] == ["score", "weight"]
+
+
+@pytest.mark.usefixtures("no_async_subprocess")
+async def test_fallback_enforces_timeout_and_output_cap() -> None:
+    slow = await run_program("while True:\n    pass\n", timeout=1)
+    assert not slow.ok and slow.error is not None and "longer than 1 second" in slow.error
+    loud = await run_program("while True:\n    print('x' * 1000)\n", timeout=3)
+    assert not loud.ok and loud.error is not None and "printed too much" in loud.error
+
+
+def test_child_env_on_windows_keeps_what_python_needs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner, "POSIX", False)
+    monkeypatch.setenv("SYSTEMROOT", r"C:\Windows")
+    monkeypatch.setenv("SECRET_TOKEN", "do-not-pass")
+    env = runner._child_env(r"C:\tmp\work")  # pyright: ignore[reportPrivateUsage]
+    assert env["SYSTEMROOT"] == r"C:\Windows" and env["TEMP"] == r"C:\tmp\work"
+    assert "SECRET_TOKEN" not in env

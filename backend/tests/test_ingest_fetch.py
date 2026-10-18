@@ -342,7 +342,9 @@ async def test_pipeline_doi_pdf(client: PoliteClient, mock: respx.MockRouter) ->
     )
     ref = PaperRef(doi="10.1000/J", title="Journal Paper", source_kind="pdf")
     report = await fetch_and_parse(ref, client, pdf_url="https://example.org/p.pdf")
-    assert report.doc.paper_id == "doi:10.1000/j" and report.doc.title == "Journal Paper"
+    assert (
+        report.doc.paper_id == "doi:10.1000_j"
+    )  # no "/" in ids: they go in URL paths and report.doc.title == "Journal Paper"
     with pytest.raises(IngestError, match="no open-access PDF"):
         await fetch_and_parse(ref, client)
 

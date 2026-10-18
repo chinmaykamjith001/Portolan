@@ -74,13 +74,29 @@ def _grounding(guess: str) -> Grounding:
     return "unknown" if guess not in {"in_code", "in_library", "concept_only"} else guess  # type: ignore[return-value]
 
 
+MAX_MASTER = 20
+MAX_CHILDREN = 10
+
+
+def _norm_key(key: str) -> str:
+    """Link ends as models write them: "Self-Attention", " self attention", "self_attention"."""
+    return "-".join(key.strip().lower().replace("_", " ").split())
+
+
+def _remember(key_to_id: dict[str, str], c: ConceptOut, cid: str) -> None:
+    """Make a concept reachable by its key and, failing that, its title."""
+    key_to_id[_norm_key(c.key)] = cid
+    key_to_id.setdefault(_norm_key(c.title), cid)
+
+
 def _links(
     layer_id: str, raw: Iterable[LinkOut], key_to_id: dict[str, str], warnings: list[str]
 ) -> list[Link]:
     links: list[Link] = []
     seen: set[tuple[str, str]] = set()
     for link in raw:
-        source, target = key_to_id.get(link.source), key_to_id.get(link.target)
+        source = key_to_id.get(_norm_key(link.source))
+        target = key_to_id.get(_norm_key(link.target))
         if source is None or target is None:
             warnings.append(
                 f"{layer_id}: dropped link with unknown end ({link.source} → {link.target})"
@@ -196,16 +212,22 @@ class ChartBuilder:
         self.store.upsert_concept(self.doc.paper_id, center)
 
         sections = _section_names(self.doc)
-        key_to_id: dict[str, str] = {CENTER: center.id}
+        key_to_id: dict[str, str] = {
+            _norm_key(CENTER): center.id,
+            _norm_key(center.title): center.id,
+        }
         members: list[str] = []
         for c in out.concepts:
+            if len(members) >= MAX_MASTER:
+                warnings.append(f"master: kept the first {MAX_MASTER} concepts")
+                break
             if canonical_name(c.title) in sections:
                 warnings.append(f"master: dropped section-name concept {c.title!r}")
                 continue
             cid, _ = await self._concept(c, depth=1)
+            _remember(key_to_id, c, cid)  # before de-duplication, so links using this key resolve
             if cid == center.id or cid in members:
                 continue
-            key_to_id[c.key] = cid
             members.append(cid)
         if not 10 <= len(members) <= 20:
             warnings.append(f"master: {len(members)} concepts (target 10-20)")
@@ -302,16 +324,21 @@ class ChartBuilder:
     async def _child_layer(
         self, parent: Concept, concepts: list[ConceptOut], links: list[LinkOut]
     ) -> Layer:
-        key_to_id: dict[str, str] = {CENTER: parent.id}
+        key_to_id: dict[str, str] = {
+            _norm_key(CENTER): parent.id,
+            _norm_key(parent.title): parent.id,
+        }
         ancestors = {canonical_name(t) for t in self.path_to(parent.id)}
         members: list[str] = []
         for c in concepts:
+            if len(members) >= MAX_CHILDREN:
+                break
             if canonical_name(c.title) in ancestors:
                 continue  # a layer never contains its own center or ancestors
             cid, _ = await self._concept(c, depth=parent.depth + 1)
+            _remember(key_to_id, c, cid)
             if cid == parent.id or cid in members:
                 continue
-            key_to_id[c.key] = cid
             members.append(cid)
         layer = Layer(
             id=parent.id,

@@ -210,10 +210,8 @@ def test_docstring_documents_every_template() -> None:
 
 
 async def test_real_sandbox_end_to_end(db: Database) -> None:
-    try:
-        await run_program("print(1)")
-    except NotImplementedError:
-        pytest.skip("sandbox not implemented yet")
+    probe = await run_program("print(1)")
+    assert probe.ok, f"the sandbox itself fails on this machine: {probe.error}"
     spec = await build(db, ScriptedProvider([llm()]))
     assert spec is not None and spec.template == "line"
     assert len(spec.data["x"]) == 13 and spec.data["series"][0]["y"][6] == 0.5  # type: ignore[index]

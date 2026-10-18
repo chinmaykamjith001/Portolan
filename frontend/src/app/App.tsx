@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useState } from "react";
 
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 import { useHealth, usePaper, usePaperEvents } from "../api/hooks";
 import type { TitleCandidate } from "../api/types";
 import { DetailDrawer } from "../detail/DetailDrawer";
@@ -134,9 +134,11 @@ function Shell() {
     setError(null);
     try {
       const res = await api.createPaper(input);
-      if (!res.pending && "paper_id" in res.data) setPaper(res.data.paper_id);
-    } catch {
-      setError(SERVER_DOWN);
+      if (res.pending) return;
+      if ("candidates" in res.data) setCandidates(res.data.candidates);
+      else setPaper(res.data.paper_id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : SERVER_DOWN);
     }
   }
 
@@ -172,21 +174,21 @@ function Shell() {
         {!error && candidates.length === 0 && !paperId && <Empty open={(i) => void open(i)} serverDown={health.isError} />}
         {paperId && view === "chart" && (
           <Suspense fallback={null}>
-            <ChartView />
+            <ChartView key={paperId} />
           </Suspense>
         )}
         {paperId && view === "route" && (
           <Suspense fallback={null}>
-            <RouteView />
+            <RouteView key={paperId} />
           </Suspense>
         )}
         {paperId && view === "faq" && (
           <Suspense fallback={null}>
-            <FaqView />
+            <FaqView key={paperId} />
           </Suspense>
         )}
         {paperId && <FindingsPanel />}
-        {paperId && <DetailDrawer />}
+        {paperId && <DetailDrawer key={paperId} />}
         {dialog === "settings" && <SettingsDialog theme={theme} setTheme={setTheme} />}
         {dialog === "help" && <ShortcutHelp />}
         {dialog === "search" && paperId && <ConceptSearch />}

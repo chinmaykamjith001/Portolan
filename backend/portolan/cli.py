@@ -18,6 +18,11 @@ from portolan.store.db import Database, open_database
 
 app = typer.Typer(help="Portolan: explore any paper and its code.", no_args_is_help=True)
 
+# Windows consoles and pipes default to cp1252; titles, "—" and "★" must not crash a command.
+for _stream in (sys.stdout, sys.stderr):
+    if (_reconfigure := getattr(_stream, "reconfigure", None)) is not None:
+        _reconfigure(encoding="utf-8", errors="replace")
+
 
 def _line(ok: bool | None, text: str) -> None:
     mark = {True: "ok  ", False: "FIX ", None: "--  "}[ok]
@@ -145,7 +150,10 @@ def serve(
         os.environ[STATIC_ENV] = str(chosen)  # an explicit --static-dir always wins
     if chosen is not None:
         typer.echo(f"Serving the app from {chosen} at http://{host}:{port}/")
-    uvicorn.run("portolan.api.app:create_app", factory=True, host=host, port=port, reload=reload)
+    uvicorn.run(
+        "portolan.api.app:create_app", factory=True, host=host, port=port, reload=reload,
+        timeout_graceful_shutdown=2,  # open SSE streams never end on their own; don't hang Ctrl+C
+    )  # fmt: skip
 
 
 @app.command()
