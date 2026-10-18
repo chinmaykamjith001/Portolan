@@ -149,3 +149,182 @@ roll-up; the builder, record CLI, API and recording done here.
 - A few orphaned skeleton fixtures remain from the discarded first Attention run (harmless).
 
 **Next: M5 — Frontend shell + Chart view.**
+
+## M5 — Frontend shell + Chart view ✅ (2026-10-18)
+
+**Plan**
+- Backend (done, efc0bba): default + angle explanations, edge explanations, rate-limit events on the
+  paper's SSE stream, `portolan schema`.
+- Contracts + shell (done): API types/client, TanStack Query hooks (202 = generating, SSE invalidation),
+  Zustand UI store, design primitives, top bar, paper strip, view switcher, empty/loading/error/
+  rate-limited states, theme setting, URL sync.
+- Chart view (`src/chart/`): React Flow canvas, ELK layout in a Web Worker (deterministic, cached per
+  layer), legend shapes, selection, breadcrumbs + Back, jump in/out animation with reduced-motion path,
+  edge double-click popover, hover prefetch, keyboard (Enter/Space, Tab, `f`).
+- Detail drawer (`src/detail/`): header (context, grounding, anchors, also-appears-in), Explain tab with
+  angles, small Markdown + KaTeX renderer, Jump in action.
+- PDF multipart upload (`POST /api/papers` with a file) + "Upload PDF" in the top bar.
+- Checks: forbidden-style test (no gradients/blur, token colors only), Playwright flow under the mock
+  provider, 300-node pan perf test, reduced-motion test.
+
+**Done / verified**
+- Backend: ruff, format, pyright (strict), 336 tests. Frontend: lint, typecheck, 53 unit tests, build.
+- Playwright (mock provider, seeded `demo:toyformer` paper): map → drawer → jump in twice → Esc/Back →
+  breadcrumb → edge popover; Fit view and Back buttons; reduced-motion jump (~180 ms, no animation).
+- 300-node pan: median 59.9 fps (headless, software rendering). First-load JS 68 KB gzipped.
+- Style check (`tests/style.test.ts`): no gradients/blur, token colors only, allowed font weights, no emoji.
+- PDF multipart upload (`POST /api/papers`) and the top-bar Upload PDF button.
+
+**Not done / known gaps**
+- "Issues inside" badge always shows 0 until findings exist (M8).
+- Layers over 60 nodes use a ring layout (ELK stress took ~25 s for 300 nodes).
+- Explanation history control skipped: the backend keeps one version per angle (M6).
+- Clicks during the ~600 ms jump animation are ignored.
+
+**Next: M6 — Node details.**
+
+## M6 — Node details (in progress)
+
+**Plan**: contracts first (models, migration 7, store, job handlers, routes, frontend types/hooks —
+committed), then four parallel pieces: sandbox + security tests; code grounding (prompt, validation,
+endpoint); examples + graph templates (prompts, sandbox use); frontend Code / Example / Graph tabs with
+arrow callouts and an in-house SVG graph renderer.
+
+## M6 — Node details ✅ (2026-10-18)
+
+**Done / verified**
+- Sandbox (ast vetting, rlimits, audit hook, no network where `unshare` works): 64 tests incl. forbidden
+  imports, infinite loop, memory bomb, hidden environment.
+- Code grounding with validated line notes (out-of-span notes dropped; one retry; `concept_only` fallback),
+  index job (clone + index the chosen repo), executed-only examples and graphs (a test asserts an
+  LLM-typed number never reaches the UI), Code / Example / Graph tabs with arrow callouts, SVG graphs.
+- 476 backend tests, 107 frontend tests, 9 Playwright tests (mock provider, seeded demo paper).
+
+**Not done / known gaps**
+- **No real recordings for M6.** arXiv and GitHub are blocked by this environment's network policy, so
+  the papers and repos couldn't be fetched. Run locally (owner): see "Recording" below.
+- Explanation history control (backend keeps one version per angle). Real syntax colors (no Shiki).
+
+**Recording (owner, local, uses the free key): ~15 requests per step per paper**
+`make record ARGS="--paper 2106.09685 --steps explain,ground,example,graph --yes"` (~60 requests) and the
+same for `1706.03762`. `ground` needs the repo cloned and indexed first (the command does it).
+
+## M7 — Route ✅ (2026-10-18)
+
+**Done / verified**
+- Route backend: stops come deterministically from the paper's section tree (appendices become side roads,
+  never stops); one `fast` call per top-level section writes titles, roles, ≤40-word summaries, concept
+  links and transitions; invalid concept ids dropped; heading-title fallback when a call fails; recurring
+  concept fields; lazy sub-routes. Stop order matches section order (tested).
+- Route view: deterministic S layout (pure functions with coordinate test vectors), curved connectors with
+  arrowheads, segment markers, Next/Previous and arrow keys with panning, jump in/out that stays on the
+  Route, "Show on Chart" / "Find on Route", reduced-motion path.
+- Playwright: 5 Route specs pass (order and S positions, keys, sub-route round trip, cross-links, reduced
+  motion).
+
+**Not done / known gaps**: no real route recordings (see Recording); side-road stubs are labels only;
+"Find on Route" looks at the main route only; no 300-stop Route perf test.
+
+## M8 — Verification ✅ (2026-10-18)
+
+**Done / verified**
+- Engine: claim extraction, localization, check ladder (`literal_match` and `static` need no LLM, then
+  `llm_judge`), reverse pass for undocumented behavior, precision-first threshold (0.7), resumable runs,
+  findings mapped to concepts with issue roll-up and live SSE.
+- Acceptance fixture (3 planted mismatches, 5 correct claims): 3 of 3 found, 0 false mismatches; two are
+  decided with no LLM. **The judge's replies in this test are scripted** — it tests the pipeline, not model
+  quality.
+- UI: findings count in the paper strip, Findings panel (mismatches and undocumented behavior by default,
+  matches and uncertain behind a toggle), drawer verdict, Code tab verdict box, mismatch glyph and
+  issues-inside badge on Chart nodes.
+
+**Not done**: `executed_test` method (needs Docker).
+
+## M9 — FAQ ✅ (2026-10-18)
+
+**Done / verified**
+- Sources: OpenReview reviews and rebuttals, GitHub issues, findings, anticipated questions; clustering,
+  grounded answers with validated citations, at most 4 requests per paper; Ask box with an explicit
+  "not supported by the sources" path.
+- View: filters by source with counts, cited anchors, "Show on Chart" / "Find on Route", loading, empty
+  and error states, `/` focuses the ask box.
+
+**Not verified**: OpenReview and GitHub response shapes follow their documentation; they were never
+fetched (network blocked here). Run `pytest -m network tests/test_network_faq.py -s` locally.
+**Not done**: paper-page discussions (optional source).
+
+## M10 — Evaluation harness ✅ (2026-10-18)
+
+**Done**: loader, deterministic sampling, resumable checkpoints, cost estimate, graceful stop at the
+daily budget, scorer, report generator (`eval/reports/<date>.md`); dry runs are labeled
+"TEST RUN — not a result". 41 tests with a fake engine and invented sample data.
+
+**Not verified — no SciCoQA numbers exist**: the real dataset format was never seen (github.com blocked
+here). The adapter's field aliases are a guess; run `portolan eval --inspect <path>` on the real download
+first. The matcher is ours, not the benchmark's. Repos are indexed at default-branch HEAD (no commit
+pinning).
+
+**Integration run (all of M5–M10)**: backend ruff, format, pyright strict, 663 tests; frontend lint,
+typecheck, 185 tests, build (first-load JS 81 KB gzipped); 21 Playwright specs in one run.
+
+**Next: M11 — Polish and release.**
+
+## M11 — Polish and release ✅ (2026-10-18)
+
+**Done / verified**
+- Keyboard: `?` shortcut help, `/` concept search over loaded layers (no requests), Esc order
+  dialog → findings → popover → drawer → back; shortcuts off while typing or in a dialog.
+- Settings dialog (provider, model roles, limits, sandbox, theme, free-tier privacy notice, key
+  instructions) backed by `GET /api/settings`, which never returns a key (a test sets fake keys and
+  asserts they never appear in any settings/health/budget response).
+- Dark mode (manual, system, override) checked in a browser; accessibility pass (names, roles, live
+  regions, focus-visible, `aria-current`, skip link) with our own `a11y` test over every view.
+- Performance, production build in this headless software-rendered container: first paint median
+  144 ms (budget 1.5 s), click → drawer 7–20 ms (100 ms), layout shift 0.0014, first-load JS 83.8 KB
+  gzipped (400 KB), 300-node pan 59.9 fps.
+- One-process serving (`portolan serve` serves `frontend/dist`), `Dockerfile` + `docker-compose.yml`,
+  README rewrite, CONTRIBUTING, CI docker job.
+- Fresh-copy quickstart run in mock mode: `make setup` → `doctor` → `seed-demo` → `make dev` → health,
+  Vite page, chart through the proxy; and a production `serve` with SPA fallback.
+- **Final gate**: backend ruff, format, pyright strict, 672 tests; frontend lint, typecheck, 262 tests,
+  build, size budget; 38 Playwright specs in one run.
+
+**Not verified (be honest with yourself before relying on it)**
+- **No real end-to-end run.** arXiv, GitHub and OpenReview were blocked in the build environment; paper
+  fetching, repo cloning, real Gemini generation for Route/verify/FAQ/details, and OpenReview/GitHub
+  response shapes were only exercised through mocks and the M4 recordings.
+- **The Docker image has never been built** (no daemon here).
+- **SciCoQA**: no numbers exist; the dataset format is a documented guess (`portolan eval --inspect`).
+- **Windows**: sandbox isolation is weaker there (timeout and static checks only).
+- Accessibility was checked with our own rules, not axe or a screen reader.
+
+**To do on your machine (owner)**
+1. Quickstart in the README with your key; paste LoRA or Attention (their Chart is already recorded).
+2. Record the rest (≈ 60–70 requests per paper in total, within one day of the free key):
+   `make record ARGS="--paper 2106.09685 --steps explain,ground,example,graph,route,verify,faq --yes"`
+   and the same for `1706.03762` (see CONTRIBUTING.md for per-step costs).
+3. `pytest -m network` (ingest, repos, FAQ sources) to confirm the external shapes.
+4. `make eval ARGS="--data <scicoqa clone> --limit 25"` after checking `portolan eval --inspect`.
+
+## Post-release fixes from a full review and a real Gemini run (2026-10-18)
+
+- Review by three agents (backend core, pipelines, frontend) plus a real end-to-end run through the
+  API with Gemini (see DECISIONS.md "Real Gemini run"). Fixed: jobs failing silently (pages stuck on
+  "Building map"), paused jobs re-queued by polling, ingest/version id mismatches, ids with "/",
+  strict LLM schemas, per-model daily quotas (fallback to the fast model), Gemini timeouts and error
+  messages, a P0-only worker, Windows sandbox (SYSTEMROOT, thread fallback, UTF-8, CRLF), missing
+  `POST /api/papers/{id}/repo` + a Code dialog, SSE reconnect, stale state across papers, Ask
+  retrieval, conflicting literal values, grounding not reaching the concept's shape.
+- Windows test failures reported by the owner's machine: fixed or made portable (memory-limit and
+  /proc tests skip off Linux; file-blocking tests use a real file on any OS).
+
+## Post-release fixes: full review + real Gemini run (2026-10-18)
+
+Three review agents (backend core, pipelines, frontend) and a real end-to-end API run with Gemini
+(DECISIONS.md "Real Gemini run"). Fixed: pages stuck on "Building map" when a job failed; paused
+jobs re-queued by polling; ingest/version id mismatches; ids containing "/"; strict LLM schemas;
+per-model daily quotas (fallback to the fast model); Gemini timeout and error messages; a P0-only
+worker; Windows sandbox (SYSTEMROOT, thread fallback, UTF-8, CRLF); the missing
+`POST /api/papers/{id}/repo` plus a Code dialog; SSE reconnect; stale state across papers; Ask
+retrieval; conflicting literal values; grounding not reaching the node shape. The owner's Windows
+test failures are fixed or made portable.

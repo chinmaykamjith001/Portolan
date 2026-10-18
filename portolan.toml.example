@@ -29,3 +29,4 @@ contact = ""                        # e.g. a project URL or email; sent in the U
 
 [storage]
 home = "~/.portolan"
+max_upload_mb = 50                  # largest PDF the API accepts

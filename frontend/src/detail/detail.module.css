@@ -1,0 +1,609 @@
+/* Detail drawer (spec §13.6). Tokens only. */
+
+.root {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  flex: none;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 28px;
+}
+
+.context {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.title {
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  min-height: 26px;
+}
+
+.title:focus {
+  outline: none;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.grounding {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+
+.verdict {
+  color: var(--ink-2);
+}
+
+.verdictMismatch {
+  color: var(--mismatch);
+  font-weight: 500;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.also {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.tabs {
+  flex: none;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.actions {
+  flex: none;
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+/* Explain tab */
+
+.angles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.angle {
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.angle:hover {
+  color: var(--ink);
+}
+
+.angle[aria-pressed="true"] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.explanation {
+  max-width: 68ch;
+  min-height: 360px; /* reserved so the streamed explanation doesn't shift the drawer */
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.explanation p {
+  margin: 0 0 var(--space-3);
+}
+
+.explanation h3,
+.explanation h4 {
+  margin: var(--space-5) 0 var(--space-1);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.explanation h4 {
+  font-weight: 500;
+}
+
+.explanation ul {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+}
+
+.lead {
+  font-weight: 500;
+}
+
+.skeleton {
+  padding-top: var(--space-1);
+}
+
+.skeletonGap {
+  height: var(--space-4);
+}
+
+.where {
+  margin-top: var(--space-5);
+}
+
+.whereLabel {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+.ref {
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+  color: var(--ink-2);
+}
+
+.tex {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  color: var(--ink-2);
+}
+
+.math {
+  white-space: nowrap;
+}
+
+.mathDisplay {
+  display: block;
+  overflow-x: auto;
+  margin: var(--space-2) 0;
+}
+
+.mathBlock {
+  margin: var(--space-3) 0;
+  overflow-x: auto;
+}
+
+.note {
+  max-width: 68ch;
+  margin: 0 0 var(--space-3);
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.error {
+  max-width: 68ch;
+  min-height: 360px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.error p {
+  margin: 0 0 var(--space-3);
+}
+
+/* Shared */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Code tab */
+
+.codeSkeleton {
+  min-height: 260px;
+}
+
+.codeSummary {
+  margin: 0 0 var(--space-3);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.libraries {
+  margin: 0 0 var(--space-3);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.libCall {
+  margin-left: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+
+.block {
+  margin: 0 0 var(--space-4);
+}
+
+.blockHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.range {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.scroll {
+  overflow: auto;
+  max-height: 440px;
+  padding: var(--space-2) 0;
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  /* the bar tint: accent lifted toward the code ink so it reads on the dark block in both themes */
+  --bar-tint: color-mix(in srgb, var(--accent) 55%, var(--code-ink));
+}
+
+.lineGroup {
+  min-width: max-content;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 40px 3px auto;
+  column-gap: 8px;
+  min-width: 100%;
+  width: max-content;
+}
+
+.num {
+  text-align: right;
+  color: var(--code-dim);
+  user-select: none;
+}
+
+.bar {
+  background: transparent;
+}
+
+.text {
+  white-space: pre;
+  padding-right: var(--space-4);
+}
+
+.rowNoted {
+  background: var(--code-hl);
+}
+
+.rowNoted .bar {
+  background: var(--bar-tint);
+}
+
+.rowMismatch {
+  background: var(--code-hl-mismatch);
+}
+
+.rowMismatch .bar {
+  background: var(--mismatch);
+}
+
+.rowContext .bar {
+  background: var(--code-dim);
+}
+
+/* When some lines are annotated, the rest recede. */
+.hasNotes .row:not(.rowNoted):not(.rowMismatch):not(.rowContext) .text {
+  opacity: 0.6;
+}
+
+.t_kw {
+  font-weight: 600;
+}
+
+.t_def {
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--code-dim);
+  text-underline-offset: 3px;
+}
+
+.t_key {
+  font-weight: 500;
+}
+
+.t_num {
+  font-weight: 500;
+}
+
+.t_str {
+  color: color-mix(in srgb, var(--code-ink) 70%, var(--code-dim));
+}
+
+.t_com {
+  color: var(--code-dim);
+  font-style: italic;
+}
+
+/* Arrow callouts: an elbow arrow pointing up at the line, with the tag and the note beside it. */
+
+.callout {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  width: fit-content;
+  max-width: 400px;
+  padding: 2px var(--space-3) var(--space-1) 56px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--code-ink);
+}
+
+.arrow {
+  flex: none;
+  color: var(--bar-tint);
+}
+
+.calloutText {
+  margin: 1px 0 0;
+}
+
+.calloutText strong {
+  font-weight: 600;
+}
+
+.bang {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-right: var(--space-1);
+  border-radius: var(--radius);
+  background: var(--mismatch);
+  color: var(--surface);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: 1px;
+}
+
+.kind_mismatch .arrow {
+  color: var(--mismatch);
+}
+
+.kind_detail_not_in_paper .arrow {
+  color: var(--code-dim);
+}
+
+.kind_detail_not_in_paper .arrow path {
+  stroke-dasharray: 3 2;
+}
+
+.kind_detail_not_in_paper strong {
+  font-style: italic;
+}
+
+.kind_context {
+  color: var(--code-dim);
+}
+
+.kind_context .arrow {
+  color: var(--code-dim);
+}
+
+.verdictBox,
+.verdictBoxMismatch {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.verdictHead {
+  margin: 0;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.verdictEvidence {
+  margin: var(--space-1) 0 0;
+}
+
+.verdictBoxMismatch {
+  border-color: var(--mismatch);
+  background: var(--mismatch-soft);
+  color: var(--ink);
+}
+
+/* Example tab */
+
+.exampleArea {
+  min-height: 220px;
+}
+
+.exampleSkeleton {
+  padding-top: var(--space-1);
+}
+
+.example {
+  margin: 0;
+}
+
+.source {
+  margin: 0 0 var(--space-1);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.exampleCaption {
+  margin: 0 0 var(--space-3);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  border-collapse: collapse;
+  min-width: 60%;
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table th {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.table .numCell {
+  text-align: right;
+}
+
+.table td.mono {
+  font-size: 12.5px;
+}
+
+.exampleNote {
+  max-width: 68ch;
+  margin: var(--space-3) 0 0;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.snippet {
+  margin-top: var(--space-4);
+  font-size: 13px;
+}
+
+.snippet summary {
+  cursor: pointer;
+  color: var(--ink-2);
+}
+
+.snippet pre {
+  overflow-x: auto;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.exampleActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.exampleCount {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* Graph tab */
+
+.graphArea {
+  min-height: 280px;
+  position: relative;
+}
+
+.graphSkeleton {
+  height: 220px;
+  margin-top: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--line);
+  opacity: 0.4;
+}

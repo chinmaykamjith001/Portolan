@@ -1,20 +1,21 @@
 /* Design tokens (spec §14.1). Use only these; no other colors anywhere. */
 :root {
+  color-scheme: light; /* native controls and scrollbars follow the theme */
   /* light */
   --bg: #F7F5F0;          /* warm off-white canvas */
   --surface: #FFFFFF;     /* drawer, popovers, nodes */
   --ink: #1A1A18;         /* primary text, outlines */
   --ink-2: #4E4C47;       /* secondary text (≥ 4.5:1 on --bg) */
-  --ink-3: #77746C;       /* tertiary, muted edges/labels (≥ 4.5:1 on --surface for 14px+) */
+  --ink-3: #726F68;       /* tertiary, muted edges/labels (≥ 4.5:1 on --bg and --surface; tests/contrast.test.ts) */
   --line: #E2DED5;        /* hairlines, dividers */
   --grid: #E9E5DC;        /* canvas dot grid */
   --accent: #2F4F8F;      /* selection + current path ONLY */
   --accent-soft: rgba(47, 79, 143, 0.18);
-  --mismatch: #B8432F;    /* mismatch ONLY, always with a shape cue */
+  --mismatch: #B03E2B;    /* mismatch ONLY, always with a shape cue (≥ 4.5:1 on --mismatch-soft) */
   --mismatch-soft: #F6E3DE;
   --code-bg: #14161A;
   --code-ink: #E7E5DF;
-  --code-dim: #8B8E96;
+  --code-dim: #9194A0;
   --code-hl: #1E2A44;
   --code-hl-mismatch: #3A2318;
   --radius: 6px;
@@ -27,6 +28,7 @@
   --font-mono: "IBM Plex Mono", monospace;
 }
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0F1318; --surface: #161B21; --ink: #ECE8DF; --ink-2: #B9B4A9; --ink-3: #8D887E;
   --line: #262C34; --grid: #1D232A; --accent: #8FA8DA; --accent-soft: rgba(143, 168, 218, 0.22);
   --mismatch: #E07A5F; --mismatch-soft: #3A2318;
@@ -34,6 +36,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #0F1318; --surface: #161B21; --ink: #ECE8DF; --ink-2: #B9B4A9; --ink-3: #8D887E;
     --line: #262C34; --grid: #1D232A; --accent: #8FA8DA; --accent-soft: rgba(143, 168, 218, 0.22);
     --mismatch: #E07A5F; --mismatch-soft: #3A2318;

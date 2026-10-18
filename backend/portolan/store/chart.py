@@ -4,7 +4,7 @@ membership table because a Concept can appear in several Layers (the graph is a 
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 
 from portolan.models.concept import MASTER, Concept, Layer
@@ -58,6 +58,23 @@ class ChartStore:
         if ids is not None:  # keep the caller's order
             out = {i: out[i] for i in wanted if i in out}
         return out
+
+    def set_issue_counts(self, paper_id: str, counts: Mapping[str, int]) -> None:
+        """Set `issue_count_self` on every concept: `counts[id]`, or 0 when absent."""
+        with self.db.transaction() as conn:
+            rows = conn.execute(
+                "SELECT concept_id, concept_json FROM concepts WHERE paper_id = ?", (paper_id,)
+            ).fetchall()
+            for row in rows:
+                c = Concept.model_validate_json(row["concept_json"])
+                wanted = counts.get(c.id, 0)
+                if c.issue_count_self != wanted:
+                    c.issue_count_self = wanted
+                    conn.execute(
+                        "UPDATE concepts SET concept_json = ?"
+                        " WHERE paper_id = ? AND concept_id = ?",
+                        (c.model_dump_json(), paper_id, c.id),
+                    )
 
     def find_by_canonical(self, paper_id: str, canonical_name: str) -> Concept | None:
         row = self.db.fetchone(

@@ -7,6 +7,7 @@ open-access PDF. Uploads are parsed as PDF.
 
 from __future__ import annotations
 
+import asyncio
 import gzip
 import hashlib
 import io
@@ -113,9 +114,10 @@ async def fetch_and_parse(
         result = await client.get(pdf_url)
         if not result.ok or result.content[:4] != b"%PDF":
             raise IngestError("Couldn't download the PDF for this DOI. Upload the PDF instead.")
-        doc = parse_pdf(
+        doc = await asyncio.to_thread(  # parsing is CPU-heavy: keep the event loop free
+            parse_pdf,
             result.content,
-            paper_id=f"doi:{ref.doi.lower()}",
+            paper_id=doi_paper_id(ref.doi),
             ref=ref.model_copy(update={"source_kind": "pdf"}),
         )
         if ref.title:
@@ -136,7 +138,7 @@ async def _arxiv(ref: PaperRef, client: PoliteClient) -> IngestReport:
     version = ref.version or (meta.version if meta else None)
     vid = f"{ref.arxiv_id}{version or ''}"
     ref = ref.model_copy(update={"version": version})
-    paper_id = f"arxiv:{vid}"
+    paper_id = arxiv_paper_id(vid)
 
     # 1. LaTeXML HTML (arxiv.org/html, then ar5iv for older papers)
     for label, url in (
@@ -152,7 +154,7 @@ async def _arxiv(ref: PaperRef, client: PoliteClient) -> IngestReport:
             attempts.append(f"{label}: not available (HTTP {result.status})")
             continue
         try:
-            doc = parse_html(result.content, paper_id=paper_id, ref=ref)
+            doc = await asyncio.to_thread(parse_html, result.content, paper_id=paper_id, ref=ref)
         except NotLaTeXML:
             attempts.append(f"{label}: not a LaTeXML page")
             continue
@@ -172,7 +174,7 @@ async def _arxiv(ref: PaperRef, client: PoliteClient) -> IngestReport:
                 pdf_bytes = result.content
             else:
                 try:
-                    doc = parse_latex(files, paper_id=paper_id, ref=ref)
+                    doc = await asyncio.to_thread(parse_latex, files, paper_id=paper_id, ref=ref)
                 except NoLatexSource:
                     attempts.append("latex: no main .tex file")
                 else:
@@ -197,8 +199,11 @@ async def _arxiv(ref: PaperRef, client: PoliteClient) -> IngestReport:
         elif result is not None:
             attempts.append(f"pdf: not available (HTTP {result.status})")
     if pdf_bytes is not None:
-        doc = parse_pdf(
-            pdf_bytes, paper_id=paper_id, ref=ref.model_copy(update={"source_kind": "pdf"})
+        doc = await asyncio.to_thread(
+            parse_pdf,
+            pdf_bytes,
+            paper_id=paper_id,
+            ref=ref.model_copy(update={"source_kind": "pdf"}),
         )
         attempts.append("pdf: ok")
         return IngestReport(doc=_with_metadata(doc, meta), attempts=attempts)
@@ -208,13 +213,26 @@ async def _arxiv(ref: PaperRef, client: PoliteClient) -> IngestReport:
     )
 
 
+def arxiv_paper_id(versioned_id: str) -> str:
+    """ "arxiv:2106.09685v2". Old-style ids ("hep-th/9711200") keep no "/": ids go in URL paths."""
+    return f"arxiv:{versioned_id.replace('/', '_')}"
+
+
+def doi_paper_id(doi: str) -> str:
+    return f"doi:{doi.lower().replace('/', '_')}"
+
+
+def upload_paper_id(data: bytes) -> str:
+    """Uploaded PDFs are identified by content, so the same file maps to the same paper."""
+    return f"upload:{hashlib.sha256(data).hexdigest()[:16]}"
+
+
 def parse_upload(data: bytes, filename: str = "upload.pdf") -> PaperDoc:
     if data[:4] != b"%PDF":
         raise IngestError(f"{filename} doesn't look like a PDF. Upload a PDF file.")
-    digest = hashlib.sha256(data).hexdigest()[:16]
     return parse_pdf(
         data,
-        paper_id=f"upload:{digest}",
+        paper_id=upload_paper_id(data),
         ref=PaperRef(source_kind="upload", title=filename),
     )
 
@@ -230,7 +248,7 @@ async def ingest_ref(
 ) -> IngestReport:
     """fetch_and_parse with the parsed-paper cache (keyed by versioned paper id)."""
     if db is not None and not refresh and ref.arxiv_id and ref.version:
-        cached = load_paper(db, f"arxiv:{ref.arxiv_id}{ref.version}")
+        cached = load_paper(db, arxiv_paper_id(f"{ref.arxiv_id}{ref.version}"))
         if cached is not None:
             return IngestReport(doc=cached, attempts=["stored: ok"], from_store=True)
     report = await fetch_and_parse(ref, client, pdf_url=pdf_url)

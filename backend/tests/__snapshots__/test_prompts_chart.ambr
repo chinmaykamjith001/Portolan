@@ -92,7 +92,8 @@
               },
               "required": [
                 "title",
-                "gist"
+                "gist",
+                "anchors"
               ],
               "title": "CenterOut",
               "type": "object"
@@ -138,7 +139,10 @@
               "required": [
                 "key",
                 "title",
-                "gist"
+                "gist",
+                "anchors",
+                "is_first_principle",
+                "grounding_guess"
               ],
               "title": "ConceptOut",
               "type": "object"
@@ -175,7 +179,8 @@
               "required": [
                 "source",
                 "target",
-                "label"
+                "label",
+                "kind"
               ],
               "title": "LinkOut",
               "type": "object"
@@ -189,8 +194,6 @@
               "items": {
                 "$ref": "#/$defs/ConceptOut"
               },
-              "maxItems": 20,
-              "minItems": 10,
               "title": "Concepts",
               "type": "array"
             },
@@ -379,7 +382,10 @@
               "required": [
                 "key",
                 "title",
-                "gist"
+                "gist",
+                "anchors",
+                "is_first_principle",
+                "grounding_guess"
               ],
               "title": "ConceptOut",
               "type": "object"
@@ -416,7 +422,8 @@
               "required": [
                 "source",
                 "target",
-                "label"
+                "label",
+                "kind"
               ],
               "title": "LinkOut",
               "type": "object"
@@ -431,8 +438,6 @@
                   "items": {
                     "$ref": "#/$defs/ConceptOut"
                   },
-                  "maxItems": 10,
-                  "minItems": 4,
                   "title": "Concepts",
                   "type": "array"
                 },

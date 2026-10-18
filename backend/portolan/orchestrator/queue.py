@@ -60,9 +60,14 @@ Handler = Callable[[Job], Awaitable[None]]
 
 
 class JobQueue:
-    def __init__(self, db: Database, bus: EventBus | None = None, workers: int = 2) -> None:
+    def __init__(
+        self, db: Database, bus: EventBus | None = None, workers: int = 2, p0_workers: int = 0
+    ) -> None:
+        """`p0_workers` extra workers take only P0 jobs, so a click never waits for a long
+        prefetch or background job to finish (dispatch-time priority alone can't preempt)."""
         if workers < 1:
             raise ValueError("workers must be >= 1")
+        self._n_p0_workers = p0_workers
         self._db = db
         self._bus = bus
         self._n_workers = workers
@@ -250,6 +255,9 @@ class JobQueue:
         self._workers = [
             asyncio.create_task(self._worker(), name=f"jobqueue-worker-{i}")
             for i in range(self._n_workers)
+        ] + [
+            asyncio.create_task(self._worker(p0_only=True), name=f"jobqueue-p0-worker-{i}")
+            for i in range(self._n_p0_workers)
         ]
         self._signal()
 
@@ -296,9 +304,9 @@ class JobQueue:
             self._push_locked(job)  # the old heap entry is now stale
         return changed
 
-    def _take(self) -> Job | None:
+    def _take(self, p0_only: bool = False) -> Job | None:
         with self._lock:
-            for priority in PRIORITIES:
+            for priority in PRIORITIES[:1] if p0_only else PRIORITIES:
                 if priority in self._paused:
                     continue
                 heap = self._heaps[priority]
@@ -319,14 +327,14 @@ class JobQueue:
                     return job
             return None
 
-    async def _worker(self) -> None:
+    async def _worker(self, p0_only: bool = False) -> None:
         wake = self._wake
         assert wake is not None
         while not self._stopping:
-            job = self._take()
+            job = self._take(p0_only)
             if job is None:
                 wake.clear()
-                job = self._take()
+                job = self._take(p0_only)
                 if job is None:
                     await wake.wait()
                     continue
@@ -408,7 +416,8 @@ def _is_pause(exc: BaseException) -> bool:
     if isinstance(exc, PauseJob):
         return True
     # Matched by name so the queue need not import the LLM layer (llm/ratelimit.py).
-    return any(cls.__name__ == "DailyBudgetExhausted" for cls in type(exc).__mro__)
+    pausing = {"DailyBudgetExhausted", "ProviderQuotaExhausted"}
+    return any(cls.__name__ in pausing for cls in type(exc).__mro__)
 
 
 def _describe(exc: BaseException) -> str:

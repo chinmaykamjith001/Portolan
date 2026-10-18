@@ -4,12 +4,22 @@
 import type {
   ApiErrorBody,
   Budget,
+  CodeGrounding,
   ConceptPayload,
   CreatePaperResult,
   EdgeExplanation,
+  FAQItem,
+  FaqPayload,
+  FindingsPayload,
+  Example,
   Explanation,
+  GraphResult,
   LayerPayload,
   PaperInfo,
+  RepoCandidate,
+  RepoStatus,
+  Settings,
+  Route,
   Angle,
 } from "./types";
 
@@ -27,12 +37,15 @@ export type Maybe<T> = { pending: true } | { pending: false; data: T };
 
 const BASE = "/api";
 
-async function request<T>(path: string, init?: RequestInit): Promise<Maybe<T>> {
+/** `acceptedHasBody`: a 202 carries the result (POST /papers: "queued, here is the paper id"). */
+async function request<T>(path: string, init?: RequestInit, acceptedHasBody = false): Promise<Maybe<T>> {
+  // FormData bodies get their multipart Content-Type (with boundary) from the browser.
+  const json: Record<string, string> = init?.body instanceof FormData ? {} : { "Content-Type": "application/json" };
   const res = await fetch(`${BASE}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: { ...json, ...(init?.headers ?? {}) },
   });
-  if (res.status === 202) return { pending: true };
+  if (res.status === 202 && !acceptedHasBody) return { pending: true };
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const err = (body as ApiErrorBody | null)?.error;
@@ -45,8 +58,14 @@ const enc = encodeURIComponent;
 
 export const api = {
   createPaper: (input: string) =>
-    request<CreatePaperResult>("/papers", { method: "POST", body: JSON.stringify({ input }) }),
-  paper: (paperId: string) => request<PaperInfo>(`/papers/${enc(paperId)}`),
+    request<CreatePaperResult>("/papers", { method: "POST", body: JSON.stringify({ input }) }, true),
+  uploadPdf: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<CreatePaperResult>("/papers", { method: "POST", body: form }, true);
+  },
+  // A 202 here still says something: which steps are running and which failed.
+  paper: (paperId: string) => request<PaperInfo>(`/papers/${enc(paperId)}`, undefined, true),
   master: (paperId: string) => request<LayerPayload>(`/papers/${enc(paperId)}/chart/master`),
   layer: (paperId: string, conceptId: string) =>
     request<LayerPayload>(`/papers/${enc(paperId)}/chart/layers/${enc(conceptId)}`),
@@ -58,6 +77,36 @@ export const api = {
     ),
   edge: (paperId: string, linkId: string) =>
     request<EdgeExplanation>(`/papers/${enc(paperId)}/links/${enc(linkId)}/explanation`),
+  code: (paperId: string, conceptId: string) =>
+    request<CodeGrounding>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/code`),
+  example: (paperId: string, conceptId: string, variant = 0) =>
+    request<Example>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/example?variant=${variant}`),
+  graph: (paperId: string, conceptId: string) =>
+    request<GraphResult>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/graph`),
+  repoCandidates: (paperId: string) =>
+    request<{ candidates: RepoCandidate[]; status: RepoStatus }>(`/papers/${enc(paperId)}/repo/candidates`),
+  /** Link code: a found candidate, a folder on this computer, or an uploaded zip. */
+  setRepo: (paperId: string, choice: { candidate_id: string } | { local_path: string } | File) => {
+    const url = `/papers/${enc(paperId)}/repo`;
+    if (choice instanceof File) {
+      const form = new FormData();
+      form.append("file", choice);
+      return request<{ repo: RepoCandidate; status: string }>(url, { method: "POST", body: form });
+    }
+    return request<{ repo: RepoCandidate; status: string }>(url, { method: "POST", body: JSON.stringify(choice) });
+  },
+  routeMain: (paperId: string) => request<Route>(`/papers/${enc(paperId)}/route/main`),
+  routeSub: (paperId: string, stopId: string) =>
+    request<Route>(`/papers/${enc(paperId)}/route/stops/${enc(stopId)}/sub`),
+  findings: (paperId: string) => request<FindingsPayload>(`/papers/${enc(paperId)}/findings`),
+  faq: (paperId: string) => request<FaqPayload>(`/papers/${enc(paperId)}/faq`),
+  ask: (paperId: string, question: string) =>
+    request<FAQItem>(`/papers/${enc(paperId)}/ask`, {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
+  settings: () => request<Settings>("/settings"),
+  health: () => request<{ status: string }>("/health"),
   budget: () => request<Budget>("/budget"),
 };
 
@@ -72,5 +121,13 @@ export const keys = {
   concept: (p: string, c: string) => ["concept", p, c] as const,
   explanation: (p: string, c: string, angle: Angle) => ["explanation", p, c, angle] as const,
   edge: (p: string, linkId: string) => ["edge", p, linkId] as const,
+  code: (p: string, c: string) => ["code", p, c] as const,
+  example: (p: string, c: string, variant: number) => ["example", p, c, variant] as const,
+  graph: (p: string, c: string) => ["graph", p, c] as const,
+  route: (p: string, routeId: string) => ["route", p, routeId] as const,
+  findings: (p: string) => ["findings", p] as const,
+  faq: (p: string) => ["faq", p] as const,
   budget: () => ["budget"] as const,
+  settings: () => ["settings"] as const,
+  health: () => ["health"] as const,
 };

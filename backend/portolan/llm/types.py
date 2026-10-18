@@ -47,6 +47,16 @@ class ProviderRateLimited(LLMError):
         self.retry_after = retry_after
 
 
+class ProviderTransient(ProviderRateLimited):
+    """Overloaded / 5xx / timeout / connection drop: worth retrying with the same backoff."""
+
+
+class ProviderQuotaExhausted(LLMError):
+    """The provider's own daily quota (free tier) is used up. Parks the job until it resets.
+
+    Named `...DailyBudgetExhausted`-like for the queue: it pauses rather than fails."""
+
+
 class ProviderError(LLMError):
     """Any other provider failure."""
 

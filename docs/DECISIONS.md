@@ -223,3 +223,192 @@ Per paper, initial Chart processing took **12 requests (LoRA)** and **11 request
 ## Ideas (not in spec; not built)
 
 _None yet._
+
+## M5 infrastructure (2026-10-18)
+
+- **PDF upload:** `POST /api/papers` also takes multipart form data (field `file`). Added
+  `python-multipart` (FastAPI needs it to parse forms). The upload is checked for `%PDF` magic
+  bytes and a size cap (`[storage] max_upload_mb`, default 50). Then it's saved to
+  `<home>/uploads/<sha256[:16]>.pdf` and ingested by the `ingest` job. Paper ids are
+  `upload:<sha256[:16]>`, the same scheme the CLI uses, so the same file always maps to the same
+  paper.
+- **Client fix:** `POST /api/papers` answers 202 with `{paper_id, status: "queued"}` for a new
+  paper. `request()` used to treat every 202 as "pending" and dropped the body, so a new paper
+  never opened. `createPaper`/`uploadPdf` now read the body of a 202.
+- **Style guard** (`frontend/tests/style.test.ts`): scans `src/**/*.{css,ts,tsx}` for gradients,
+  blur/backdrop-filter, color literals outside `tokens.css`, named colors, Inter, Tailwind palette
+  classes, font weights other than 400/500/600, emoji, and `var(--x)` with no definition. It reads
+  files with `node:fs` because Vitest hides CSS text from `?raw` imports.
+- **`@types/node`** (dev only): needed by the Playwright config/specs and the style test. These
+  files are type-checked by `tsconfig.node.json`, so Node globals (e.g. `setTimeout` returning
+  `Timeout`) stay out of the app's tsconfig. `vite.config.ts` moved there too.
+- **E2E data: real backend + seeded DB**, not `page.route()` stubs, so the flow exercises the
+  real endpoints and SSE. `portolan seed-demo` (`backend/portolan/dev/seed.py`) writes a fixed
+  demo paper (`demo:toyformer`: 3 levels, every grounding, one mismatch, explanations and edge
+  explanations for everything) with no network and no LLM. Every concept without a layer is a
+  first principle, so opening layers never queues LLM work. Playwright starts the backend on
+  :8765 (fresh temp `PORTOLAN_HOME`, empty config, `PORTOLAN_NO_DOTENV=1`, mock provider) and
+  Vite on :5174 (`PORTOLAN_API_URL` points the proxy at it).
+- **Chromium:** if `/opt/pw-browsers/chromium` exists, the config uses it (that container ships
+  build 1194; @playwright/test 1.64 expects 1248). `PW_CHROMIUM` overrides it. CI runs
+  `playwright install --with-deps chromium`.
+- **Perf page:** `frontend/e2e/perf.html` (dev server only; `vite build` builds only index.html)
+  renders `ChartCanvas` with `syntheticLayer(300)`. Measured in headless Chromium in the cloud
+  container, dev build: median 59.9 fps while panning (p95 frame 17-33 ms). The assertion is a
+  median of at least 50 fps.
+
+
+## M6 sandbox (`backend/portolan/sandbox/`)
+
+- **numpy added as a runtime dependency**: spec §10.7.3 allows it in example and graph programs, and
+  it wasn't installed. Pre-imported in the child with `numpy.random/linalg/fft/polynomial`.
+- **Layers** (each independent): (1) `ast` check — import allowlist (`math statistics fractions json
+  numpy`), no `open/exec/eval/compile/getattr/...`, no names or attributes starting with `_`,
+  no string constants containing `__` (blocks `"{0.__class__}".format`), no numpy file IO
+  (`load/save/fromfile/memmap/...`), 8 KB cap. (2) Separate process: `python -I`, empty temp cwd,
+  explicit minimal env (no parent variables, so no API key), stdin closed, new session so the whole
+  process group is killed on timeout, stdout capped at 64 KB. (3) In the child: `RLIMIT_CPU/AS/NOFILE/
+  FSIZE/CORE`, reduced `builtins` and a guarded `__import__`, and a `sys.addaudithook` that allows
+  reads only inside the interpreter's install (plus `/proc/self`, `/dev/urandom`), allows directory
+  listing only there, and blocks writes, sockets, subprocesses, `os.system/fork/exec/remove/...`
+  and ctypes. (4) `unshare -n` (empty network namespace) when it works for the current user
+  (`-r -n` as a fallback); otherwise a warning is logged once and layers 1-3 stand alone.
+- **Memory limit** is headroom on top of what the imports already mapped (`RLIMIT_AS` =
+  address space after importing numpy + `memory_mb`), because numpy maps far more than it uses.
+- **Limitations**: Windows gets the timeout and the static check only (no `resource`, no process
+  group); macOS doesn't enforce `RLIMIT_AS`, so the memory limit is best-effort there. The
+  audit hook is a guard rail, not a security boundary against a determined attacker — the
+  Docker mode in the spec (`sandbox.mode = "docker"`) remains the stronger option and is not built.
+  Programs are LLM-written from paper text, so untrusted-input prompt injection is the threat model.
+
+## M10 — SciCoQA evaluation harness
+
+- **The dataset format is unverified.** github.com was unreachable when the harness was written, so
+  `evalharness/adapters.py` maps fields through a documented alias table instead of the official
+  schema, reports every row it can't map, and `portolan eval --inspect PATH` shows what was detected.
+  The owner must check it against the real download before trusting any number.
+- **The matcher is ours, not the benchmark's.** A prediction (`mismatch` / `undocumented_in_paper`)
+  matches a gold discrepancy by code location (same file, within 5 lines) or by word overlap (Dice
+  ≥ 0.35, ≥ 2 shared words), one-to-one. Pluggable (`Matcher`); replace it if the official scorer
+  differs. Precision is a lower bound when the gold list is incomplete.
+- **Resume = append-only JSONL keyed by (record id, engine version).** The engine version is a hash of
+  `verify/*.py` and the claim/verify/judge prompts, so changing the engine never reuses old results
+  (old lines stay). Failed records are retried by default; unfinished records (budget stop) leave no line.
+- **Per-record cost estimate: 15 requests** (the pessimistic end of §5.3's 10-15 for verification);
+  the report prints the measured number. Confirmation is asked above 30 requests.
+- **Dry run** (`--dry-run`) uses a fake engine on invented sample data and a throwaway checkpoint
+  folder; its report is stamped "TEST RUN — not a result" and `write_report` refuses it.
+- **Known gap: no commit pinning.** `repo.cloner.clone` checks out the default branch, so records that
+  name another commit are indexed at HEAD; the report notes each such record. Pinning would be a change
+  to the cloner, not to the harness.
+- **Known gap:** the real engine runs `verify_paper` with an empty chart, which is meant to work
+  (verification is independent of the Chart, §10.9) but could not be exercised here because the
+  engine was still being written; the real path is covered only with injected fakes.
+
+## M9 — FAQ backend
+
+- **External response shapes are from documentation, not from a live call.** The container that built
+  this had no route to openreview.net or github.com. `faq/sources.py` therefore parses defensively and
+  is covered only by mocked responses (`tests/test_faq_sources.py`). Assumed OpenReview API v2 shapes:
+  `GET /notes/search?term=<title>&content=title&source=forum` returns `{"notes": [...]}` with each
+  note's `content.title.value`; `GET /notes?forum=<id>&limit=1000` returns the whole thread; a review
+  has an invitation ending `Official_Review` and its questions in `content.questions.value`; an author
+  reply is any note whose `signatures` contain `Authors` and whose `replyto` chain reaches the review.
+  Plain (v1-style) string values are accepted too. GitHub: `GET /repos/{o}/{n}/issues` (PRs carry a
+  `pull_request` key) and `/issues/{n}/comments` with `author_association`. **The owner should run
+  `pytest -m network tests/test_network_faq.py -s` once**; if it fails, fix `_val`, `_is_review` and
+  `_is_author` in `faq/sources.py` against what it prints.
+- **Only answered reviewer questions become items.** A question with no author reply says nothing yet;
+  the whole author thread under the review is handed to the model, which sets `keep=false` when the
+  reply doesn't address that question.
+- **Findings answer themselves.** A `mismatch` or `undocumented_in_paper` finding becomes "Does the code
+  use X as in the paper?" with its own evidence as the answer: no request. They are listed first.
+- **Clustering is lexical** (Jaccard ≥ 0.55 over stemmed content words). Embeddings are not used, so the
+  default install behaves the same as one with the extra; a finding outranks a reviewer, a reviewer an issue.
+- **Request budget per build ≤ 4** (P2): at most 18 clusters in batches of 6 = 3 answer calls, plus one
+  anticipated call, skipped when 80% of the day's requests are used or the provider already failed.
+  The Ask box is one P0 call, or none when retrieval finds nothing relevant.
+- **Every answer cites an anchor or a URL.** Anchors the model cites must be among the passages it was
+  given (invented ones are dropped); anticipated answers, which have no URL, are dropped when no valid
+  anchor remains. Ids are a hash of source + exact question text + URL, so a rebuild replaces instead of
+  duplicating; answers come from the gateway cache on a second run.
+- **Concept links** use shared anchors first (weight 3), then the section enclosing a cited paragraph
+  (1), then the concept title appearing in the text (1); at most 3.
+- **Ask box says "The paper and code don't answer this."** (`supported=false`) when retrieval is empty,
+  the model declines, or its citations don't survive validation. Asked items are saved into the FAQ.
+- **Not done:** paper-page discussions (the spec's optional source 3); `record --steps faq` can only
+  capture reviewer and issue answers on a machine that can reach those sites.
+
+
+## M11 — design token contrast fixes (needs owner OK)
+
+A contrast test (`frontend/tests/contrast.test.ts`) computes WCAG ratios for the token pairs in
+`tokens.css` in both themes. Three pairs in PORTOLAN_SPEC.md §14.1 fall short of the 4.5:1 the spec
+itself requires (§13.12), so the values were adjusted slightly:
+
+| Token | Spec value | Now | Ratio before → after |
+|---|---|---|---|
+| light `--ink-3` | `#77746C` | `#726F68` | 4.28 → 4.60 on `--bg` |
+| light `--mismatch` | `#B8432F` | `#B03E2B` | 4.37 → 4.75 on `--mismatch-soft` |
+| `--code-dim` | `#8B8E96` | `#9194A0` | 4.36 → 4.73 on highlighted code lines |
+
+The spec file itself was not edited (it wins over everything else); update §14.1 if you agree.
+
+## Real Gemini run (2026-10-18) — measured, not assumed
+
+An end-to-end run through the HTTP API with the owner's free key (paper: a 5-section PDF about the
+`tiny_transformer` fixture, code: that fixture linked as a local folder). arXiv/GitHub were blocked
+in the build environment, so ingestion went through PDF upload.
+
+- **`gemini-3.8-flash` allows 20 free requests per day** (Google's 429:
+  `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit 20). `gemini-3.5-flash-lite` kept
+  working. The configured `rpd = 1400` is far above what some models allow, so a paper used up the
+  `default`/`strong` model within minutes. **Decision:** when the provider reports a model's daily
+  quota is gone, the gateway remembers it until midnight Pacific and sends that role to the `fast`
+  model (cached answers of the original model are still used); if both are gone the job pauses
+  with the reason shown. `portolan doctor` now says so.
+- Flash-Lite **omits optional fields** (`notes` in ground_code, citation lists in ask_answer),
+  which dropped correct answers. **Decision:** every field of a reply schema is listed as required
+  in the JSON Schema sent to the model (`ReplySchema`); our validation still has defaults.
+- Enums and counts are validated **leniently** (unknown → safe default, extra concepts trimmed):
+  one off-list word must not throw away a whole reply.
+- Retrieval for the Ask box missed "divided by sqrt(d_k)" vs "scale by the square root of d_k".
+  **Decision:** notation is spelled out before matching (sqrt → square root, lr, dim, eq, ...) and a
+  matched equation brings its neighbouring paragraphs.
+- Literal verification called "label smoothing 0.1" a match because a class default was 0.1 while
+  the config/CLI default was 0.0. **Decision:** conflicting exactly-named values go to the judge.
+
+Results (all through the API, real model): master layer 13 concepts in 32 s; jump-in 4 children;
+default explanation 215 words in the §10.7.1 structure; simpler angle; edge explanation; code
+grounding with 4 line notes on `toyformer/attention.py` 10–17 (and "pre-LN vs the paper's post-LN"
+for layer norm); worked example + "another example" computed in the sandbox; line graph; route of
+10 stops in section order with transitions and a sub-route; verification 17 findings (literal and
+static decided most with no LLM); FAQ built; Ask answered with a citation and code lines, and said
+"not supported" for an unanswerable question. ~175 requests, most of them burned by the paused-job
+re-queue bug fixed in the same session.
+
+## Real Gemini run (2026-10-18) — measured, not assumed
+
+End-to-end through the HTTP API with the owner's free key (paper: a 5-section PDF about the
+`tiny_transformer` fixture; code: that fixture linked as a local folder; arXiv/GitHub were blocked
+in the build environment, so ingestion used PDF upload).
+
+- **`gemini-3.8-flash` allows 20 free requests per day** (Google's 429 names
+  `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit 20); `gemini-3.5-flash-lite` kept
+  working. **Decision:** when the provider reports a model's daily quota is gone, the gateway
+  remembers it until midnight Pacific and sends that role to the `fast` model (the original
+  model's cached answers are still used); if both are gone the job pauses with the reason shown.
+  `portolan doctor` says so.
+- Flash-Lite **omits optional fields** (`notes`, citation lists), which dropped correct answers.
+  **Decision:** every reply field is listed as required in the schema sent to the model
+  (`ReplySchema`); our own validation keeps defaults. Enums and counts validate leniently.
+- Ask retrieval missed "divided by sqrt(d_k)" vs "scale by the square root of d_k". **Decision:**
+  notation is spelled out before matching, and a matched equation brings its neighbouring paragraphs.
+- Literal verification called "label smoothing 0.1" a match (class default 0.1, config/CLI default
+  0.0). **Decision:** conflicting exactly-named values go to the judge.
+
+Measured: master layer 13 concepts (32 s); explanation 215 words in the §10.7.1 structure; code
+grounding with 4 line notes on `toyformer/attention.py` 10–17; sandboxed example + "another
+example"; line graph; route of 10 stops in section order + a sub-route; 17 verification findings
+(most decided with no LLM); FAQ; Ask answered with a citation and code lines, and said "not
+supported" for an unanswerable question. The UI rendered all of it in Chromium.

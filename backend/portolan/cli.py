@@ -18,6 +18,11 @@ from portolan.store.db import Database, open_database
 
 app = typer.Typer(help="Portolan: explore any paper and its code.", no_args_is_help=True)
 
+# Windows consoles and pipes default to cp1252; titles, "—" and "★" must not crash a command.
+for _stream in (sys.stdout, sys.stderr):
+    if (_reconfigure := getattr(_stream, "reconfigure", None)) is not None:
+        _reconfigure(encoding="utf-8", errors="replace")
+
 
 def _line(ok: bool | None, text: str) -> None:
     mark = {True: "ok  ", False: "FIX ", None: "--  "}[ok]
@@ -116,7 +121,12 @@ def _check_gemini_models() -> int:
         typer.echo("\n  Suggested portolan.toml section:\n\n  [llm.models]")
         for role, model in suggestion.items():
             typer.echo(f'  {role} = "{model}"')
-        typer.echo("")
+        typer.echo(
+            "\n  Free keys: daily limits differ per model and some are tiny (seen: 20 requests a"
+            "\n  day for a Flash model). When a model's daily quota runs out, Portolan uses the"
+            "\n  `fast` model for that role until midnight US Pacific. Your real limits are at"
+            "\n  https://aistudio.google.com (rate limits page).\n"
+        )
     else:
         _line(False, "No Flash/Flash-Lite model found; set [llm.models] by hand.")
         return 1
@@ -128,11 +138,27 @@ def serve(
     host: str = typer.Option("127.0.0.1", help="Interface to bind."),
     port: int = typer.Option(8000, help="Port."),
     reload: bool = typer.Option(False, help="Reload on code changes (development)."),
+    static_dir: str = typer.Option(
+        "", help="Serve this built frontend at / (default: frontend/dist when it exists)."
+    ),
 ) -> None:
-    """Run the backend API server."""
+    """Run the backend API server (and the built frontend, if there is one)."""
+    import os
+    from pathlib import Path
+
     import uvicorn
 
-    uvicorn.run("portolan.api.app:create_app", factory=True, host=host, port=port, reload=reload)
+    from portolan.api.static import STATIC_ENV, default_static_dir
+
+    chosen = Path(static_dir) if static_dir else default_static_dir()
+    if chosen is not None and (static_dir or STATIC_ENV not in os.environ):
+        os.environ[STATIC_ENV] = str(chosen)  # an explicit --static-dir always wins
+    if chosen is not None:
+        typer.echo(f"Serving the app from {chosen} at http://{host}:{port}/")
+    uvicorn.run(
+        "portolan.api.app:create_app", factory=True, host=host, port=port, reload=reload,
+        timeout_graceful_shutdown=2,  # open SSE streams never end on their own; don't hang Ctrl+C
+    )  # fmt: skip
 
 
 @app.command()
@@ -443,7 +469,25 @@ def schema(out: str = typer.Option("", help="Write to this file instead of stdou
         typer.echo(text)
 
 
-RECORD_STEPS = ("master", "skeleton")
+@app.command("seed-demo")
+def seed_demo() -> None:
+    """Write a small demo paper and its map into the database (no network, no LLM)."""
+    from portolan.dev.seed import seed_demo as seed
+
+    config = load_config()
+    db = open_database(config.storage.db_path)
+    try:
+        paper_id = seed(db)
+    finally:
+        db.close()
+    typer.echo(f"Seeded {paper_id} into {config.storage.db_path}")
+    typer.echo(f"Open http://localhost:5173/?paper={paper_id}")
+
+
+DETAIL_STEPS = ("explain", "ground", "example", "graph")
+RECORD_STEPS = (
+    "master", "skeleton", "explain", "ground", "example", "graph", "route", "faq", "verify",
+)  # fmt: skip
 
 
 @app.command()
@@ -473,7 +517,14 @@ def record(
         typer.echo("portolan.toml still has placeholder model ids. Run `portolan doctor` first.")
         raise typer.Exit(code=1)
     # §5.3: master 1-2, level-1 skeletons ~4, level-2 ~15, plus a few same-concept checks.
-    estimate = (2 if "master" in wanted else 0) + (25 if "skeleton" in wanted else 0)
+    estimate = (
+        (2 if "master" in wanted else 0)
+        + (25 if "skeleton" in wanted else 0)
+        + 15 * len([s for s in wanted if s in DETAIL_STEPS])  # one per master-layer concept
+        + (4 if "faq" in wanted else 0)  # up to 3 answer batches + 1 anticipated batch
+        + (9 if "route" in wanted else 0)  # one per top-level section
+        + (18 if "verify" in wanted else 0)  # <= 6 extraction + <= 10 judge batches + 1 reverse
+    )
     typer.echo(f"This will use up to ~{estimate} real Gemini requests (cached answers are free).")
     if estimate > 30 and not yes and not typer.confirm("Continue?", default=False):
         raise typer.Exit(code=1)
@@ -501,7 +552,17 @@ async def _record(raw: str, config: Config, db: Database, steps: list[str]) -> N
 
     gateway = Gateway(config, db, recorder=FixtureStore(DEFAULT_FIXTURES), on_event=on_event)
     store = ChartStore(db)
-    store.delete_paper(doc.paper_id)  # rebuild so every call is captured (cache answers are free)
+    if "master" in steps or "skeleton" in steps:
+        store.delete_paper(
+            doc.paper_id
+        )  # rebuild so every call is captured (cache answers are free)
+    elif store.get_layer(doc.paper_id, MASTER) is None:
+        # Detail steps need the map the earlier recordings made: replay it from fixtures (free).
+        replay_config = config.model_copy(deep=True)
+        replay_config.llm.provider = "mock"
+        replay = ChartBuilder(doc, Gateway(replay_config, db), store)
+        await replay.master()
+        await replay.ensure_frontier(MASTER, levels=2)
     builder = ChartBuilder(doc, gateway, store)
     before = gateway.limiter.budget.today()
     if "master" in steps:
@@ -513,12 +574,111 @@ async def _record(raw: str, config: Config, db: Database, steps: list[str]) -> N
         typer.echo("Building skeletons two levels below the master layer…")
         made = await builder.ensure_frontier(MASTER, levels=2)
         typer.echo(f"  {len(made)} child layers")
+    detail_steps = [st for st in steps if st in DETAIL_STEPS]
+    if detail_steps:
+        from portolan.code.ensure import ensure_index
+        from portolan.detail.example import make_example
+        from portolan.detail.explain import explain
+        from portolan.detail.graph import make_graph
+        from portolan.detail.ground import ground_code
+        from portolan.store.repos import chosen_repo
+
+        layer = store.get_layer(doc.paper_id, MASTER)
+        if layer is None:
+            typer.echo("Skipping detail steps: no master layer (run the master step first).")
+        else:
+            if "ground" in detail_steps:
+                repo = chosen_repo(db, doc.paper_id)
+                typer.echo("Cloning and indexing the code…")
+                if repo is None or not await ensure_index(config, db, doc.paper_id, repo):
+                    typer.echo("  no code to ground against; skipping ground.")
+                    detail_steps.remove("ground")
+            for cid in layer.concepts:
+                title = store.concepts(doc.paper_id, [cid])[cid].title
+                for st in detail_steps:
+                    try:
+                        if st == "explain":
+                            await explain(doc, gateway, store, cid, "default")
+                        elif st == "ground":
+                            g = await ground_code(doc, gateway, store, db, cid)
+                            typer.echo(f"  {title}: {g.grounding} ({len(g.notes)} notes)")
+                        elif st == "example":
+                            await make_example(doc, gateway, store, cid, 0, [])
+                        elif st == "graph":
+                            await make_graph(doc, gateway, store, cid)
+                    except Exception as exc:  # one bad concept must not waste the rest of the run
+                        typer.echo(f"  {title}: {st} failed ({exc})")
+                typer.echo(f"  done: {title}")
+    if "verify" in steps:
+        from portolan.code.ensure import ensure_index
+        from portolan.store.findings import FindingStore
+        from portolan.store.repos import chosen_repo
+        from portolan.verify.engine import verify_paper
+
+        repo = chosen_repo(db, doc.paper_id)
+        typer.echo("Cloning and indexing the code…")
+        if repo is None or not await ensure_index(config, db, doc.paper_id, repo):
+            typer.echo("  no code to verify against; skipping verify.")
+        else:
+            FindingStore(db).delete_paper(doc.paper_id)  # a recording run starts clean
+            typer.echo("Checking the paper's claims against the code…")
+            await verify_paper(
+                doc, gateway, store, db,
+                lambda f: typer.echo(f"  {f.verdict:<22} {f.claim_text[:70]}"),
+            )  # fmt: skip
+            counts: dict[str, int] = {}
+            for f in FindingStore(db).all(doc.paper_id):
+                counts[f.verdict] = counts.get(f.verdict, 0) + 1
+            typer.echo("  " + (", ".join(f"{n} {v}" for v, n in sorted(counts.items())) or "none"))
+    if "route" in steps:
+        from portolan.route.build import build_main_route
+        from portolan.store.routes import RouteStore
+
+        typer.echo("Writing the Route (one request per top-level section)…")
+        routes = RouteStore(db)
+        route = await build_main_route(doc, gateway, store, routes)
+        routes.save(route)
+        openable = sum(1 for s in route.stops if s.sub_route_id)
+        typer.echo(f"  {len(route.stops)} stops, {openable} that open into a sub-route")
+    if "faq" in steps:
+        from portolan.faq.build import build_faq
+
+        typer.echo("Building the FAQ (reviewer discussion, GitHub issues, findings, anticipated)…")
+        kinds: list[str] = []
+        async with PoliteClient(db, contact=config.http.contact) as faq_http:
+            await build_faq(
+                doc, gateway, store, db, faq_http, lambda item: kinds.append(item.source_kind)
+            )
+        typer.echo(f"  {len(kinds)} items: " + (", ".join(sorted(set(kinds))) or "none"))
     after = gateway.limiter.budget.today()
     used = sum(int(r["requests"]) for r in after) - sum(int(r["requests"]) for r in before)
     typer.echo(f"\nReal requests this run: {used} (calls answered from cache: free).")
     for w in builder.build.warnings:
         typer.echo(f"  warning: {w}")
     typer.echo(f"Fixtures written under {DEFAULT_FIXTURES}")
+
+
+@app.command("eval")
+def eval_command(
+    data: str | None = typer.Option(None, "--data", help="SciCoQA download (folder or file)."),
+    limit: int = typer.Option(25, help="How many records to run (0 = all)."),
+    split: str = typer.Option("all", help="all | real | synthetic"),
+    seed: int = typer.Option(0, help="Sampling seed: same seed, same records."),
+    out: str | None = typer.Option(None, help="Checkpoint folder (default eval/runs)."),
+    report_dir: str | None = typer.Option(None, help="Report folder (default eval/reports)."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Don't ask before spending requests."),
+    fresh: bool = typer.Option(False, help="Ignore saved results and start over."),
+    dry_run: bool = typer.Option(False, help="Fake engine on the sample data: no requests."),
+    inspect: str | None = typer.Option(None, help="Show how a dataset is read, then stop."),
+    retry_failed: bool = typer.Option(True, help="Run records that failed last time again."),
+) -> None:
+    """Measure the verification engine on SciCoQA (resumable, stops when the daily budget ends)."""
+    from portolan.evalharness.commands import run_eval
+
+    run_eval(
+        data=data, limit=limit, split=split, seed=seed, out=out, report_dir=report_dir, yes=yes,
+        fresh=fresh, dry_run=dry_run, inspect=inspect, retry_failed=retry_failed,
+    )  # fmt: skip
 
 
 if __name__ == "__main__":

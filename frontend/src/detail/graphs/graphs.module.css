@@ -1,0 +1,150 @@
+/* In-house SVG graphs (spec §10.7.4). Tokens only: accent for the primary series, ink-2 / ink-3 for the rest. */
+
+.figure {
+  position: relative;
+  margin: 0;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.caption {
+  margin: 0 0 var(--space-3);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.note {
+  margin: var(--space-3) 0 0;
+  max-width: 68ch;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.axis {
+  stroke: var(--ink-3);
+  stroke-width: 1;
+  fill: none;
+}
+
+.grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.tick {
+  fill: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.axisTitle {
+  fill: var(--ink-2);
+  font-size: 12px;
+}
+
+.cellText {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.fillAccent {
+  fill: var(--accent);
+}
+
+.fillInk2 {
+  fill: var(--ink-2);
+}
+
+.fillInk3 {
+  fill: var(--ink-3);
+}
+
+.strokeAccent {
+  stroke: var(--accent);
+  fill: none;
+}
+
+.strokeInk2 {
+  stroke: var(--ink-2);
+  fill: none;
+}
+
+.strokeInk3 {
+  stroke: var(--ink-3);
+  fill: none;
+}
+
+.dashA {
+  stroke-dasharray: 5 3;
+}
+
+.dashB {
+  stroke-dasharray: 1.5 3;
+}
+
+.line {
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.cellOn {
+  fill: var(--surface);
+}
+
+.cellOff {
+  fill: var(--ink);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.swatchAccent {
+  background: var(--accent);
+}
+
+.swatchInk2 {
+  background: var(--ink-2);
+}
+
+.swatchInk3 {
+  background: var(--ink-3);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -17,6 +17,8 @@ export interface Concept {
   has_layer: boolean;
   gen_state: GenState;
   issue_count_self: number;
+  /** Findings in the sub-map below this concept (M8). */
+  issues_inside?: number;
 }
 
 export interface Link {
@@ -63,6 +65,7 @@ export interface RepoCandidate {
   official_evidence: string | null;
   status: "ok" | "placeholder" | "dead" | "unknown";
   stars: number | null;
+  host?: string; // "github" | "gitlab" | "local" | "upload"
 }
 
 export interface PaperInfo {
@@ -77,6 +80,8 @@ export interface PaperInfo {
   repo?: RepoCandidate | null;
   chart_ready?: boolean;
   jobs?: Record<string, string>;
+  /** Failed background steps by kind, each a plain-language reason. */
+  failures?: Record<string, string>;
 }
 
 export interface TitleCandidate {
@@ -149,4 +154,142 @@ export interface ProgressEvent {
 
 export interface ApiErrorBody {
   error: { code: string; message: string };
+}
+
+export interface CodeSpan {
+  repo_id: string;
+  commit_sha: string;
+  path: string;
+  start_line: number;
+  end_line: number;
+}
+
+export type NoteKind = "implements" | "detail_not_in_paper" | "mismatch" | "context";
+
+export interface LineNote {
+  line: number;
+  tag: string;
+  note: string;
+  kind: NoteKind;
+}
+
+export interface CodeGrounding {
+  concept_id: string;
+  grounding: Grounding;
+  spans: CodeSpan[];
+  notes: LineNote[];
+  library_calls: string[];
+  summary: string;
+  /** {path: {line number: text}} for every line of every span. */
+  code: Record<string, Record<string, string>>;
+  /** path -> URL of the file at the commit */
+  links: Record<string, string>;
+}
+
+export interface Example {
+  concept_id: string;
+  variant: number;
+  source_label: "generic" | "paper_notation" | "from_repo_run";
+  caption: string;
+  program: string;
+  columns: string[];
+  rows: string[][];
+  note: string | null;
+}
+
+export type GraphTemplate = "bar" | "line" | "heatmap" | "before_after" | "distribution";
+
+export interface GraphSpec {
+  concept_id: string;
+  template: GraphTemplate;
+  caption: string;
+  /** Computed by the sandbox. Shape per template: see src/detail/graphs. */
+  data: Record<string, unknown>;
+  note: string | null;
+}
+
+export type GraphResult = GraphSpec | { template: "none" };
+
+export type StopRole = "first_mention" | "definition" | "setting" | "result" | "argument" | "other";
+
+export interface Stop {
+  id: string;
+  route_id: string;
+  order: number;
+  title: string;
+  section_label: string; // "§3.2.1" or "§3.2.1 ¶2"
+  anchor_id: string;
+  role: StopRole;
+  concept_id: string | null;
+  summary: string;
+  transition_to_next: string | null;
+  sub_route_id: string | null; // set when jumping in is possible
+  segment_title: string | null; // first stop of each top-level section
+  first_stop_id: string | null; // later mentions: where the concept first appeared
+  seen_again_at: string[]; // first mention: stop ids where it appears again
+  side_roads: string[]; // appendix anchor ids this stop refers to
+}
+
+export interface Route {
+  id: string; // "main" or a stop id
+  paper_id: string;
+  parent_stop_id: string | null;
+  stops: Stop[];
+}
+
+export type Verdict = "matches" | "mismatch" | "undocumented_in_paper" | "uncertain" | "not_found";
+export type Severity = "high" | "medium" | "low";
+
+export interface Finding {
+  id: string;
+  claim_text: string;
+  claim_type: string;
+  paper_anchor: string;
+  code_spans: CodeSpan[];
+  verdict: Verdict;
+  severity: Severity;
+  confidence: number;
+  method: "literal_match" | "static" | "llm_judge" | "executed_test";
+  evidence: string;
+  concept_ids: string[];
+}
+
+export interface FindingsPayload {
+  findings: Finding[];
+  state: "none" | "running" | "done" | "failed";
+}
+
+export type FaqSource =
+  | "reviewer_discussion"
+  | "github_issue"
+  | "paper_page_discussion"
+  | "finding"
+  | "anticipated"
+  | "user_asked";
+
+export interface FAQItem {
+  id: string;
+  question: string;
+  answer_markdown: string;
+  source_kind: FaqSource;
+  source_url: string | null;
+  source_label: string;
+  concept_ids: string[];
+  anchors_cited: string[];
+  supported: boolean;
+}
+
+export interface FaqPayload {
+  items: FAQItem[];
+}
+
+/** GET /api/settings: what Settings shows. Never contains keys. */
+export interface Settings {
+  version: string;
+  provider: "gemini" | "ollama" | "mock";
+  models: { fast: string; default: string; strong: string };
+  limits: { rpm: number; rpd: number; tpm: number };
+  free_tier_notice: boolean;
+  sandbox_mode: "process" | "docker";
+  repo_linked?: boolean;
 }
