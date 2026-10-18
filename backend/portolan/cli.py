@@ -128,10 +128,23 @@ def serve(
     host: str = typer.Option("127.0.0.1", help="Interface to bind."),
     port: int = typer.Option(8000, help="Port."),
     reload: bool = typer.Option(False, help="Reload on code changes (development)."),
+    static_dir: str = typer.Option(
+        "", help="Serve this built frontend at / (default: frontend/dist when it exists)."
+    ),
 ) -> None:
-    """Run the backend API server."""
+    """Run the backend API server (and the built frontend, if there is one)."""
+    import os
+    from pathlib import Path
+
     import uvicorn
 
+    from portolan.api.static import STATIC_ENV, default_static_dir
+
+    chosen = Path(static_dir) if static_dir else default_static_dir()
+    if chosen is not None and (static_dir or STATIC_ENV not in os.environ):
+        os.environ[STATIC_ENV] = str(chosen)  # an explicit --static-dir always wins
+    if chosen is not None:
+        typer.echo(f"Serving the app from {chosen} at http://{host}:{port}/")
     uvicorn.run("portolan.api.app:create_app", factory=True, host=host, port=port, reload=reload)
 
 

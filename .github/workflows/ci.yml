@@ -70,3 +70,10 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report
 
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker build -t portolan .

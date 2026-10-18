@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -16,6 +17,8 @@ from portolan.api.findings_api import router as findings_router
 from portolan.api.papers import router as papers_router
 from portolan.api.route_api import router as route_router
 from portolan.api.services import Services
+from portolan.api.settings_api import router as settings_router
+from portolan.api.static import mount_frontend, static_dir_from_env
 from portolan.config import Config, api_key_present, load_config
 from portolan.ingest.http import PoliteClient
 from portolan.llm.gateway import init_gateway
@@ -47,7 +50,11 @@ def build_services(config: Config) -> Services:
     return svc
 
 
-def create_app(config: Config | None = None, services: Services | None = None) -> FastAPI:
+def create_app(
+    config: Config | None = None,
+    services: Services | None = None,
+    static_dir: Path | None = None,
+) -> FastAPI:
     config = config or load_config()
 
     @asynccontextmanager
@@ -69,6 +76,7 @@ def create_app(config: Config | None = None, services: Services | None = None) -
     app.include_router(route_router)
     app.include_router(findings_router)
     app.include_router(faq_router)
+    app.include_router(settings_router)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(_request: Request, exc: StarletteHTTPException) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
@@ -106,4 +114,8 @@ def create_app(config: Config | None = None, services: Services | None = None) -
         svc: Services = request.app.state.services
         return svc.gateway.budget_state()
 
+    # Opt in only (`portolan serve` sets PORTOLAN_STATIC_DIR), so tests never serve a stale build.
+    static = static_dir or static_dir_from_env()
+    if static is not None and (static / "index.html").is_file():
+        mount_frontend(app, static)
     return app

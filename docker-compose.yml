@@ -1,0 +1,27 @@
+# Run Portolan as one container:   docker compose up --build   →   http://localhost:8000
+#
+# Your key stays in .env (never baked into the image). Create it first if you want real answers:
+#   cp .env.example .env     # then set GEMINI_API_KEY and PORTOLAN_LLM_PROVIDER=gemini
+# Without a .env the container starts with no key; only the demo paper works
+# (docker compose exec portolan portolan seed-demo, then open /?paper=demo:toyformer).
+#
+# Model ids and limits live in portolan.toml. To use yours, uncomment the volume line below
+# (the file must exist first: cp portolan.toml.example portolan.toml).
+services:
+  portolan:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORTOLAN_HOME: /data
+      # PORTOLAN_CONFIG: /config/portolan.toml
+    volumes:
+      - portolan-data:/data
+      # - ./portolan.toml:/config/portolan.toml:ro
+    restart: unless-stopped
+
+volumes:
+  portolan-data:
