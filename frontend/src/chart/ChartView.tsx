@@ -375,7 +375,13 @@ function Scene({ paperId, layerId, payload, status, onHoverConcept, issuesInside
   const onNodeMouseLeave = useCallback(() => window.clearTimeout(hover.current), []);
   useEffect(() => () => window.clearTimeout(hover.current), []);
 
-  const onNodeClick: NodeMouseHandler<ConceptNodeType> = useCallback((_e, node) => select(node.id), [select]);
+  const onNodeClick: NodeMouseHandler<ConceptNodeType> = useCallback(
+    (e, node) => {
+      // The click pair of a double-click would open the drawer just before the jump closes it.
+      if (e.detail < 2) select(node.id);
+    },
+    [select],
+  );
   const onNodeDoubleClick: NodeMouseHandler<ConceptNodeType> = useCallback(
     (_e, node) => {
       if (jumpable(node.id)) jumpIn(node.id);
@@ -403,6 +409,7 @@ function Scene({ paperId, layerId, payload, status, onHoverConcept, issuesInside
         nodesConnectable={false}
         elementsSelectable={false}
         nodesFocusable
+        onlyRenderVisibleElements
         edgesFocusable={false}
         panOnDrag
         panOnScroll

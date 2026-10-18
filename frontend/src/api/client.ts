@@ -27,12 +27,15 @@ export type Maybe<T> = { pending: true } | { pending: false; data: T };
 
 const BASE = "/api";
 
-async function request<T>(path: string, init?: RequestInit): Promise<Maybe<T>> {
+/** `acceptedHasBody`: a 202 carries the result (POST /papers: "queued, here is the paper id"). */
+async function request<T>(path: string, init?: RequestInit, acceptedHasBody = false): Promise<Maybe<T>> {
+  // FormData bodies get their multipart Content-Type (with boundary) from the browser.
+  const json: Record<string, string> = init?.body instanceof FormData ? {} : { "Content-Type": "application/json" };
   const res = await fetch(`${BASE}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: { ...json, ...(init?.headers ?? {}) },
   });
-  if (res.status === 202) return { pending: true };
+  if (res.status === 202 && !acceptedHasBody) return { pending: true };
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const err = (body as ApiErrorBody | null)?.error;
@@ -45,7 +48,12 @@ const enc = encodeURIComponent;
 
 export const api = {
   createPaper: (input: string) =>
-    request<CreatePaperResult>("/papers", { method: "POST", body: JSON.stringify({ input }) }),
+    request<CreatePaperResult>("/papers", { method: "POST", body: JSON.stringify({ input }) }, true),
+  uploadPdf: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<CreatePaperResult>("/papers", { method: "POST", body: form }, true);
+  },
   paper: (paperId: string) => request<PaperInfo>(`/papers/${enc(paperId)}`),
   master: (paperId: string) => request<LayerPayload>(`/papers/${enc(paperId)}/chart/master`),
   layer: (paperId: string, conceptId: string) =>

@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type DragEvent, type FormEvent } from "react";
 
 import { ApiError, api } from "../api/client";
 import { useBudget } from "../api/hooks";
-import type { TitleCandidate } from "../api/types";
+import type { CreatePaperResult, TitleCandidate } from "../api/types";
+import type { Maybe } from "../api/client";
 import { Logo } from "../design/Logo";
 import { Button, Popover } from "../design/primitives";
 import { useUI } from "../state/store";
@@ -37,15 +38,14 @@ export function TopBar({
   const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
   const { data: budget } = useBudget();
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    const input = value.trim();
-    if (!input) return;
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function run(call: () => Promise<Maybe<CreatePaperResult>>) {
     setBusy(true);
     onError(null);
     try {
-      const res = await api.createPaper(input);
-      if (res.pending || !res.data) return;
+      const res = await call();
+      if (res.pending) return;
       if ("candidates" in res.data) onCandidates(res.data.candidates);
       else {
         onCandidates([]);
@@ -56,6 +56,28 @@ export function TopBar({
     } finally {
       setBusy(false);
     }
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const input = value.trim();
+    if (input) void run(() => api.createPaper(input));
+  }
+
+  function upload(file: File | undefined) {
+    if (!file) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      onError(`${file.name} doesn't look like a PDF. Upload a PDF file.`);
+      return;
+    }
+    void run(() => api.uploadPdf(file));
+  }
+
+  function drop(e: DragEvent<HTMLInputElement>) {
+    const file = e.dataTransfer.files[0];
+    if (!file) return; // dropped text: let the input take it
+    e.preventDefault();
+    upload(file);
   }
 
   return (
@@ -77,10 +99,28 @@ export function TopBar({
           placeholder="Paste an arXiv link, DOI, PDF or title"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+          }}
+          onDrop={drop}
         />
         <Button type="submit" disabled={busy}>
           {busy ? "Opening…" : "Open"}
         </Button>
+        <Button quiet disabled={busy} onClick={() => fileRef.current?.click()}>
+          Upload PDF
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          hidden
+          aria-label="PDF file"
+          onChange={(e) => {
+            upload(e.target.files?.[0]);
+            e.target.value = ""; // choosing the same file again still fires
+          }}
+        />
       </form>
       <span className={styles.spacer} />
       <Budget />

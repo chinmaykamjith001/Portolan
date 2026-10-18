@@ -223,3 +223,37 @@ Per paper, initial Chart processing took **12 requests (LoRA)** and **11 request
 ## Ideas (not in spec; not built)
 
 _None yet._
+
+## M5 infrastructure (2026-10-18)
+
+- **PDF upload:** `POST /api/papers` also takes multipart form data (field `file`). Added
+  `python-multipart` (FastAPI needs it to parse forms). The upload is checked for `%PDF` magic
+  bytes and a size cap (`[storage] max_upload_mb`, default 50). Then it's saved to
+  `<home>/uploads/<sha256[:16]>.pdf` and ingested by the `ingest` job. Paper ids are
+  `upload:<sha256[:16]>`, the same scheme the CLI uses, so the same file always maps to the same
+  paper.
+- **Client fix:** `POST /api/papers` answers 202 with `{paper_id, status: "queued"}` for a new
+  paper. `request()` used to treat every 202 as "pending" and dropped the body, so a new paper
+  never opened. `createPaper`/`uploadPdf` now read the body of a 202.
+- **Style guard** (`frontend/tests/style.test.ts`): scans `src/**/*.{css,ts,tsx}` for gradients,
+  blur/backdrop-filter, color literals outside `tokens.css`, named colors, Inter, Tailwind palette
+  classes, font weights other than 400/500/600, emoji, and `var(--x)` with no definition. It reads
+  files with `node:fs` because Vitest hides CSS text from `?raw` imports.
+- **`@types/node`** (dev only): needed by the Playwright config/specs and the style test. These
+  files are type-checked by `tsconfig.node.json`, so Node globals (e.g. `setTimeout` returning
+  `Timeout`) stay out of the app's tsconfig. `vite.config.ts` moved there too.
+- **E2E data: real backend + seeded DB**, not `page.route()` stubs, so the flow exercises the
+  real endpoints and SSE. `portolan seed-demo` (`backend/portolan/dev/seed.py`) writes a fixed
+  demo paper (`demo:toyformer`: 3 levels, every grounding, one mismatch, explanations and edge
+  explanations for everything) with no network and no LLM. Every concept without a layer is a
+  first principle, so opening layers never queues LLM work. Playwright starts the backend on
+  :8765 (fresh temp `PORTOLAN_HOME`, empty config, `PORTOLAN_NO_DOTENV=1`, mock provider) and
+  Vite on :5174 (`PORTOLAN_API_URL` points the proxy at it).
+- **Chromium:** if `/opt/pw-browsers/chromium` exists, the config uses it (that container ships
+  build 1194; @playwright/test 1.64 expects 1248). `PW_CHROMIUM` overrides it. CI runs
+  `playwright install --with-deps chromium`.
+- **Perf page:** `frontend/e2e/perf.html` (dev server only; `vite build` builds only index.html)
+  renders `ChartCanvas` with `syntheticLayer(300)`. Measured in headless Chromium in the cloud
+  container, dev build: median 59.9 fps while panning (p95 frame 17-33 ms). The assertion is a
+  median of at least 50 fps.
+

@@ -1,4 +1,4 @@
-.PHONY: setup dev backend frontend test lint typecheck record eval
+.PHONY: e2e setup dev backend frontend test lint typecheck record eval
 
 ARGS ?=
 
@@ -34,3 +34,6 @@ record:
 
 eval:
 	cd backend && uv run portolan eval $(ARGS)
+
+e2e:  ## Playwright end-to-end tests (mock provider, seeded demo paper)
+	cd frontend && pnpm e2e

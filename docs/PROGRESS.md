@@ -150,7 +150,7 @@ roll-up; the builder, record CLI, API and recording done here.
 
 **Next: M5 — Frontend shell + Chart view.**
 
-## M5 — Frontend shell + Chart view (in progress)
+## M5 — Frontend shell + Chart view ✅ (2026-10-18)
 
 **Plan**
 - Backend (done, efc0bba): default + angle explanations, edge explanations, rate-limit events on the
@@ -166,3 +166,19 @@ roll-up; the builder, record CLI, API and recording done here.
 - PDF multipart upload (`POST /api/papers` with a file) + "Upload PDF" in the top bar.
 - Checks: forbidden-style test (no gradients/blur, token colors only), Playwright flow under the mock
   provider, 300-node pan perf test, reduced-motion test.
+
+**Done / verified**
+- Backend: ruff, format, pyright (strict), 336 tests. Frontend: lint, typecheck, 53 unit tests, build.
+- Playwright (mock provider, seeded `demo:toyformer` paper): map → drawer → jump in twice → Esc/Back →
+  breadcrumb → edge popover; Fit view and Back buttons; reduced-motion jump (~180 ms, no animation).
+- 300-node pan: median 59.9 fps (headless, software rendering). First-load JS 68 KB gzipped.
+- Style check (`tests/style.test.ts`): no gradients/blur, token colors only, allowed font weights, no emoji.
+- PDF multipart upload (`POST /api/papers`) and the top-bar Upload PDF button.
+
+**Not done / known gaps**
+- "Issues inside" badge always shows 0 until findings exist (M8).
+- Layers over 60 nodes use a ring layout (ELK stress took ~25 s for 300 nodes).
+- Explanation history control skipped: the backend keeps one version per angle (M6).
+- Clicks during the ~600 ms jump animation are ignored.
+
+**Next: M6 — Node details.**
