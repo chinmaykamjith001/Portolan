@@ -7,6 +7,7 @@ LiteLLM is imported lazily because it is slow to import and is never needed unde
 from __future__ import annotations
 
 import importlib
+import logging
 import re
 from typing import Any
 
@@ -32,6 +33,8 @@ def _litellm() -> Any:
     module: Any = importlib.import_module("litellm")
     module.suppress_debug_info = True
     module.telemetry = False
+    # One "temperature is deprecated for Gemini 3" warning per call would flood the server log.
+    logging.getLogger("LiteLLM").setLevel(logging.ERROR)
     return module
 
 

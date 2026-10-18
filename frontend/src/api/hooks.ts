@@ -182,7 +182,10 @@ export function usePaperEvents(paperId: string | null): LiveState {
   useEffect(() => {
     setState({ progress: null, rateLimitedUntil: null, lastError: null }); // a new paper starts clean
     if (paperId === null || typeof EventSource === "undefined") return;
-    const source = new EventSource(eventsUrl(paperId));
+    let source: EventSource;
+    let closed = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let backoff = 1000;
     const recovered = () => setState((s) => (s.lastError === null ? s : { ...s, lastError: null }));
     const parse = (e: MessageEvent<string>): Record<string, unknown> => {
       try {
@@ -191,63 +194,85 @@ export function usePaperEvents(paperId: string | null): LiveState {
         return {};
       }
     };
-    source.addEventListener("progress", (e) => {
-      const data = parse(e as MessageEvent<string>) as unknown as ProgressEvent;
-      setState((s) => ({ ...s, progress: data }));
-      if (data.stage === "reading" || data.stage === "finding_code") {
-        void qc.invalidateQueries({ queryKey: keys.paper(paperId) });
-      }
-    });
-    source.addEventListener("layer_ready", (e) => {
-      const data = parse(e as MessageEvent<string>);
-      recovered();
-      void qc.invalidateQueries({ queryKey: keys.layer(paperId, String(data.layer_id)) });
-      // The parent layer's payload says whether this child can be jumped into: refresh visible ones.
-      void qc.invalidateQueries({ queryKey: ["layer", paperId], refetchType: "active" });
-      void qc.invalidateQueries({ queryKey: keys.paper(paperId) });
-      void qc.invalidateQueries({ queryKey: ["concept", paperId] });
-    });
-    source.addEventListener("detail_ready", (e) => {
-      const data = parse(e as MessageEvent<string>);
-      recovered();
-      if (data.part === "edge") {
-        void qc.invalidateQueries({ queryKey: keys.edge(paperId, String(data.link_id)) });
-      } else if (data.part === "code" || data.part === "example" || data.part === "graph") {
-        void qc.invalidateQueries({ queryKey: [data.part, paperId, String(data.concept_id)] });
-        void qc.invalidateQueries({ queryKey: keys.concept(paperId, String(data.concept_id)) });
-      } else {
-        void qc.invalidateQueries({ queryKey: ["explanation", paperId, String(data.concept_id)] });
-        void qc.invalidateQueries({ queryKey: keys.concept(paperId, String(data.concept_id)) });
-      }
-      void qc.invalidateQueries({ queryKey: keys.budget() });
-    });
-    source.addEventListener("route_ready", (e) => {
-      const data = parse(e as MessageEvent<string>);
-      recovered();
-      void qc.invalidateQueries({ queryKey: keys.route(paperId, String(data.route_id)) });
-    });
-    source.addEventListener("finding_added", () => {
-      void qc.invalidateQueries({ queryKey: keys.findings(paperId) });
-      void qc.invalidateQueries({ queryKey: ["layer", paperId] });
-      void qc.invalidateQueries({ queryKey: ["concept", paperId] });
-    });
-    source.addEventListener("faq_ready", () => {
-      void qc.invalidateQueries({ queryKey: keys.faq(paperId) });
-    });
-    source.addEventListener("rate_limited", (e) => {
-      const data = parse(e as MessageEvent<string>);
-      const wait = Number(data.wait_seconds ?? 10);
-      setState((s) => ({ ...s, rateLimitedUntil: Date.now() + wait * 1000 }));
-    });
-    source.addEventListener("error", (e) => {
-      const msg = (e as MessageEvent<string>).data;
-      if (typeof msg === "string" && msg) {
-        void qc.invalidateQueries({ queryKey: keys.paper(paperId) }); // a job failed: show why
+    const connect = () => {
+      source = new EventSource(eventsUrl(paperId));
+      source.addEventListener("open", () => {
+        backoff = 1000;
+      });
+      source.addEventListener("progress", (e) => {
+        const data = parse(e as MessageEvent<string>) as unknown as ProgressEvent;
+        setState((s) => ({ ...s, progress: data }));
+        if (data.stage === "reading" || data.stage === "finding_code") {
+          void qc.invalidateQueries({ queryKey: keys.paper(paperId) });
+        }
+      });
+      source.addEventListener("layer_ready", (e) => {
         const data = parse(e as MessageEvent<string>);
-        setState((s) => ({ ...s, lastError: String(data.message ?? "Something went wrong.") }));
-      }
-    });
-    return () => source.close();
+        recovered();
+        void qc.invalidateQueries({ queryKey: keys.layer(paperId, String(data.layer_id)) });
+        // The parent layer's payload says whether this child can be jumped into: refresh visible ones.
+        void qc.invalidateQueries({ queryKey: ["layer", paperId], refetchType: "active" });
+        void qc.invalidateQueries({ queryKey: keys.paper(paperId) });
+        void qc.invalidateQueries({ queryKey: ["concept", paperId] });
+      });
+      source.addEventListener("detail_ready", (e) => {
+        const data = parse(e as MessageEvent<string>);
+        recovered();
+        if (data.part === "edge") {
+          void qc.invalidateQueries({ queryKey: keys.edge(paperId, String(data.link_id)) });
+        } else if (data.part === "code" || data.part === "example" || data.part === "graph") {
+          void qc.invalidateQueries({ queryKey: [data.part, paperId, String(data.concept_id)] });
+          void qc.invalidateQueries({ queryKey: keys.concept(paperId, String(data.concept_id)) });
+        } else {
+          void qc.invalidateQueries({ queryKey: ["explanation", paperId, String(data.concept_id)] });
+          void qc.invalidateQueries({ queryKey: keys.concept(paperId, String(data.concept_id)) });
+        }
+        void qc.invalidateQueries({ queryKey: keys.budget() });
+      });
+      source.addEventListener("route_ready", (e) => {
+        const data = parse(e as MessageEvent<string>);
+        recovered();
+        void qc.invalidateQueries({ queryKey: keys.route(paperId, String(data.route_id)) });
+      });
+      source.addEventListener("finding_added", () => {
+        void qc.invalidateQueries({ queryKey: keys.findings(paperId) });
+        void qc.invalidateQueries({ queryKey: ["layer", paperId] });
+        void qc.invalidateQueries({ queryKey: ["concept", paperId] });
+      });
+      source.addEventListener("faq_ready", () => {
+        void qc.invalidateQueries({ queryKey: keys.faq(paperId) });
+      });
+      source.addEventListener("rate_limited", (e) => {
+        const data = parse(e as MessageEvent<string>);
+        const wait = Number(data.wait_seconds ?? 10);
+        setState((s) => ({ ...s, rateLimitedUntil: Date.now() + wait * 1000 }));
+      });
+      source.addEventListener("error", (e) => {
+        const msg = (e as MessageEvent<string>).data;
+        if (typeof msg === "string" && msg) {
+          void qc.invalidateQueries({ queryKey: keys.paper(paperId) }); // a job failed: show why
+          const data = parse(e as MessageEvent<string>);
+          // "RuntimeError: ..." -> "...": the class name means nothing to a reader.
+          const text = String(data.message ?? "Something went wrong.").replace(/^[A-Za-z]+: /, "");
+          setState((s) => ({ ...s, lastError: text }));
+        } else if (source.readyState === EventSource.CLOSED && !closed) {
+          // The browser gives up after an HTTP error (server restart, proxy): reopen ourselves,
+          // and refetch what an event might have announced while we were away.
+          retryTimer = setTimeout(() => {
+            connect();
+            void qc.invalidateQueries({ queryKey: keys.paper(paperId) });
+            void qc.invalidateQueries({ queryKey: ["layer", paperId], refetchType: "active" });
+          }, backoff);
+          backoff = Math.min(backoff * 2, 30_000);
+        }
+      });
+    };
+    connect();
+    return () => {
+      closed = true;
+      clearTimeout(retryTimer);
+      source.close();
+    };
   }, [paperId, qc]);
 
   return state;

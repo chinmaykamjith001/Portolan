@@ -11,6 +11,7 @@ import { ConceptSearch } from "./ConceptSearch";
 import dialogStyles from "./dialogs.module.css";
 import { useGlobalShortcuts } from "./keys";
 import { SERVER_DOWN } from "./messages";
+import { CodeDialog } from "./CodeDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { PaperStrip } from "./PaperStrip";
@@ -191,6 +192,7 @@ function Shell() {
         {paperId && <DetailDrawer key={paperId} />}
         {dialog === "settings" && <SettingsDialog theme={theme} setTheme={setTheme} />}
         {dialog === "help" && <ShortcutHelp />}
+        {dialog === "code" && paperId && <CodeDialog />}
         {dialog === "search" && paperId && <ConceptSearch />}
       </main>
     </div>

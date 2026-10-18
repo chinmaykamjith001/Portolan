@@ -16,6 +16,8 @@ import type {
   GraphResult,
   LayerPayload,
   PaperInfo,
+  RepoCandidate,
+  RepoStatus,
   Settings,
   Route,
   Angle,
@@ -81,6 +83,18 @@ export const api = {
     request<Example>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/example?variant=${variant}`),
   graph: (paperId: string, conceptId: string) =>
     request<GraphResult>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/graph`),
+  repoCandidates: (paperId: string) =>
+    request<{ candidates: RepoCandidate[]; status: RepoStatus }>(`/papers/${enc(paperId)}/repo/candidates`),
+  /** Link code: a found candidate, a folder on this computer, or an uploaded zip. */
+  setRepo: (paperId: string, choice: { candidate_id: string } | { local_path: string } | File) => {
+    const url = `/papers/${enc(paperId)}/repo`;
+    if (choice instanceof File) {
+      const form = new FormData();
+      form.append("file", choice);
+      return request<{ repo: RepoCandidate; status: string }>(url, { method: "POST", body: form });
+    }
+    return request<{ repo: RepoCandidate; status: string }>(url, { method: "POST", body: JSON.stringify(choice) });
+  },
   routeMain: (paperId: string) => request<Route>(`/papers/${enc(paperId)}/route/main`),
   routeSub: (paperId: string, stopId: string) =>
     request<Route>(`/papers/${enc(paperId)}/route/stops/${enc(stopId)}/sub`),

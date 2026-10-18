@@ -65,6 +65,7 @@ export interface RepoCandidate {
   official_evidence: string | null;
   status: "ok" | "placeholder" | "dead" | "unknown";
   stars: number | null;
+  host?: string; // "github" | "gitlab" | "local" | "upload"
 }
 
 export interface PaperInfo {

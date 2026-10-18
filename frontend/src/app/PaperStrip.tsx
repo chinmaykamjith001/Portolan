@@ -30,6 +30,7 @@ function Progress({ live, paper }: { live: LiveState; paper: PaperInfo | null | 
 export function PaperStrip({ paper, live }: { paper: PaperInfo | null | undefined; live: LiveState }) {
   const view = useUI((s) => s.view);
   const setView = useUI((s) => s.setView);
+  const openDialog = useUI((s) => s.openDialog);
   const waiting = live.rateLimitedUntil !== null && live.rateLimitedUntil > Date.now();
   const seconds = waiting ? Math.ceil(((live.rateLimitedUntil ?? 0) - Date.now()) / 1000) : 0;
   const authors = paper?.authors ?? [];
@@ -49,7 +50,16 @@ export function PaperStrip({ paper, live }: { paper: PaperInfo | null | undefine
           {paper.version ?? ""}
         </span>
       )}
-      {paper?.repo_status && <span className={styles.meta}>{paper.repo_status.message}</span>}
+      {paper && paper.status !== "processing" && (
+        <span className={styles.meta}>
+          {paper.repo
+            ? `Code: ${paper.repo.owner}/${paper.repo.name}`
+            : (paper.repo_status?.message ?? "No code linked yet")}{" "}
+          <button type="button" className={styles.linkButton} onClick={() => openDialog("code")}>
+            change
+          </button>
+        </span>
+      )}
       <FindingsControl paper={paper} />
       {paper?.low_structure && <span className={styles.notice}>Parsed from PDF; structure may be approximate.</span>}
       <div className={styles.views}>

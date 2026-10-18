@@ -21,7 +21,7 @@ export interface PendingFocus {
 }
 
 /** A modal dialog over the whole app. Shortcuts are off while one is open. */
-export type DialogName = "settings" | "help" | "search";
+export type DialogName = "settings" | "help" | "search" | "code";
 
 export interface UIState {
   paperId: string | null;
