@@ -458,7 +458,8 @@ def seed_demo() -> None:
     typer.echo(f"Open http://localhost:5173/?paper={paper_id}")
 
 
-RECORD_STEPS = ("master", "skeleton", "ground")
+DETAIL_STEPS = ("explain", "ground", "example", "graph")
+RECORD_STEPS = ("master", "skeleton", "explain", "ground", "example", "graph")
 
 
 @app.command()
@@ -491,7 +492,7 @@ def record(
     estimate = (
         (2 if "master" in wanted else 0)
         + (25 if "skeleton" in wanted else 0)
-        + (15 if "ground" in wanted else 0)  # one per master-layer concept
+        + 15 * len([s for s in wanted if s in DETAIL_STEPS])  # one per master-layer concept
     )
     typer.echo(f"This will use up to ~{estimate} real Gemini requests (cached answers are free).")
     if estimate > 30 and not yes and not typer.confirm("Continue?", default=False):
@@ -520,7 +521,17 @@ async def _record(raw: str, config: Config, db: Database, steps: list[str]) -> N
 
     gateway = Gateway(config, db, recorder=FixtureStore(DEFAULT_FIXTURES), on_event=on_event)
     store = ChartStore(db)
-    store.delete_paper(doc.paper_id)  # rebuild so every call is captured (cache answers are free)
+    if "master" in steps or "skeleton" in steps:
+        store.delete_paper(
+            doc.paper_id
+        )  # rebuild so every call is captured (cache answers are free)
+    elif store.get_layer(doc.paper_id, MASTER) is None:
+        # Detail steps need the map the earlier recordings made: replay it from fixtures (free).
+        replay_config = config.model_copy(deep=True)
+        replay_config.llm.provider = "mock"
+        replay = ChartBuilder(doc, Gateway(replay_config, db), store)
+        await replay.master()
+        await replay.ensure_frontier(MASTER, levels=2)
     builder = ChartBuilder(doc, gateway, store)
     before = gateway.limiter.budget.today()
     if "master" in steps:
@@ -532,24 +543,41 @@ async def _record(raw: str, config: Config, db: Database, steps: list[str]) -> N
         typer.echo("Building skeletons two levels below the master layer…")
         made = await builder.ensure_frontier(MASTER, levels=2)
         typer.echo(f"  {len(made)} child layers")
-    if "ground" in steps:
+    detail_steps = [st for st in steps if st in DETAIL_STEPS]
+    if detail_steps:
         from portolan.code.ensure import ensure_index
+        from portolan.detail.example import make_example
+        from portolan.detail.explain import explain
+        from portolan.detail.graph import make_graph
         from portolan.detail.ground import ground_code
         from portolan.store.repos import chosen_repo
 
-        repo = chosen_repo(db, doc.paper_id)
         layer = store.get_layer(doc.paper_id, MASTER)
-        if repo is None or layer is None:
-            typer.echo("Skipping ground: needs a chosen repo and a master layer (run those first).")
+        if layer is None:
+            typer.echo("Skipping detail steps: no master layer (run the master step first).")
         else:
-            typer.echo("Cloning and indexing the code…")
-            if not await ensure_index(config, db, doc.paper_id, repo):
-                typer.echo("  couldn't download the code; nothing to ground.")
-            else:
-                typer.echo("Grounding each master-layer concept in the code…")
-                for cid in layer.concepts:
-                    g = await ground_code(doc, gateway, store, db, cid)
-                    typer.echo(f"  {cid}: {g.grounding} ({len(g.notes)} notes)")
+            if "ground" in detail_steps:
+                repo = chosen_repo(db, doc.paper_id)
+                typer.echo("Cloning and indexing the code…")
+                if repo is None or not await ensure_index(config, db, doc.paper_id, repo):
+                    typer.echo("  no code to ground against; skipping ground.")
+                    detail_steps.remove("ground")
+            for cid in layer.concepts:
+                title = store.concepts(doc.paper_id, [cid])[cid].title
+                for st in detail_steps:
+                    try:
+                        if st == "explain":
+                            await explain(doc, gateway, store, cid, "default")
+                        elif st == "ground":
+                            g = await ground_code(doc, gateway, store, db, cid)
+                            typer.echo(f"  {title}: {g.grounding} ({len(g.notes)} notes)")
+                        elif st == "example":
+                            await make_example(doc, gateway, store, cid, 0, [])
+                        elif st == "graph":
+                            await make_graph(doc, gateway, store, cid)
+                    except Exception as exc:  # one bad concept must not waste the rest of the run
+                        typer.echo(f"  {title}: {st} failed ({exc})")
+                typer.echo(f"  done: {title}")
     after = gateway.limiter.budget.today()
     used = sum(int(r["requests"]) for r in after) - sum(int(r["requests"]) for r in before)
     typer.echo(f"\nReal requests this run: {used} (calls answered from cache: free).")
