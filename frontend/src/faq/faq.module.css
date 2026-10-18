@@ -1,0 +1,201 @@
+/* FAQ view (spec §13.8). Tokens only. */
+
+.root {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.column {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+}
+
+.ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.askInput {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.askInput::placeholder {
+  color: var(--ink-3);
+}
+
+.askInput:disabled {
+  color: var(--ink-3);
+}
+
+.askStatus {
+  flex-basis: 100%;
+  min-height: 20px;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.filter {
+  padding: var(--space-1) 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.filter[aria-pressed="true"] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.list {
+  margin-top: var(--space-4);
+}
+
+.item {
+  padding: var(--space-4) 0 var(--space-5);
+  border-top: 1px solid var(--line);
+}
+
+.fresh {
+  margin: 0 0 var(--space-1);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.question {
+  margin: 0 0 var(--space-2);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.answer {
+  max-width: 68ch;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.answer p {
+  margin: 0 0 var(--space-3);
+}
+
+.answer h3,
+.answer h4 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.answer ul {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+}
+
+.unsupported {
+  max-width: 68ch;
+  margin: 0 0 var(--space-2);
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.source {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.source a {
+  color: var(--ink-2);
+  text-underline-offset: 3px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.concepts {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.concepts li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+.conceptName {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--ink);
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.state {
+  margin: var(--space-5) 0 0;
+  color: var(--ink-2);
+}
+
+.loading {
+  margin-top: var(--space-5);
+  color: var(--ink-2);
+}
+
+.skeleton {
+  /* reserve the height of a real item so nothing shifts when answers arrive */
+  min-height: 96px;
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--line);
+}
