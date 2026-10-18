@@ -21,6 +21,9 @@ import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from portolan.dev.seed_faq import seed_faq
+from portolan.dev.seed_findings import seed_findings
+from portolan.dev.seed_route import seed_route
 from portolan.llm.prompts.detail_schemas import ExplainSections
 from portolan.models.code import CodeSpan, LineNote
 from portolan.models.concept import MASTER, Concept, Grounding, Layer, Link, LinkKind
@@ -598,4 +601,7 @@ def seed_demo(db: Database) -> str:
     graph_for = {g.concept_id: g for g in graphs()}
     for c in CONCEPTS.values():
         details.save_graph(DEMO_PAPER_ID, c.id, graph_for.get(c.id))  # None = "no graph"
+    seed_route(db, DEMO_PAPER_ID)
+    seed_findings(db, DEMO_PAPER_ID)
+    seed_faq(db, DEMO_PAPER_ID)
     return DEMO_PAPER_ID
