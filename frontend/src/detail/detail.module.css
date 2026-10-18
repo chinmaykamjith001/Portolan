@@ -1,0 +1,235 @@
+/* Detail drawer (spec §13.6). Tokens only. */
+
+.root {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  flex: none;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 28px;
+}
+
+.context {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.title {
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  min-height: 26px;
+}
+
+.title:focus {
+  outline: none;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.grounding {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+
+.verdict {
+  color: var(--ink-2);
+}
+
+.verdictMismatch {
+  color: var(--mismatch);
+  font-weight: 500;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.also {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.tabs {
+  flex: none;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.actions {
+  flex: none;
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+/* Explain tab */
+
+.angles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.angle {
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.angle:hover {
+  color: var(--ink);
+}
+
+.angle[aria-pressed="true"] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.explanation {
+  max-width: 68ch;
+  min-height: 360px; /* reserved so the streamed explanation doesn't shift the drawer */
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.explanation p {
+  margin: 0 0 var(--space-3);
+}
+
+.explanation h3,
+.explanation h4 {
+  margin: var(--space-5) 0 var(--space-1);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.explanation h4 {
+  font-weight: 500;
+}
+
+.explanation ul {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+}
+
+.lead {
+  font-weight: 500;
+}
+
+.skeleton {
+  padding-top: var(--space-1);
+}
+
+.skeletonGap {
+  height: var(--space-4);
+}
+
+.where {
+  margin-top: var(--space-5);
+}
+
+.whereLabel {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+.ref {
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+  color: var(--ink-2);
+}
+
+.tex {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  color: var(--ink-2);
+}
+
+.math {
+  white-space: nowrap;
+}
+
+.mathDisplay {
+  display: block;
+  overflow-x: auto;
+  margin: var(--space-2) 0;
+}
+
+.mathBlock {
+  margin: var(--space-3) 0;
+  overflow-x: auto;
+}
+
+.note {
+  max-width: 68ch;
+  margin: 0 0 var(--space-3);
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.error {
+  max-width: 68ch;
+  min-height: 360px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.error p {
+  margin: 0 0 var(--space-3);
+}
