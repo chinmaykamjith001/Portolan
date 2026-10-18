@@ -5,14 +5,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { keys } from "../api/client";
-import { useConcept, useLayer, usePaper } from "../api/hooks";
+import { useConcept, useGraph, useLayer, usePaper } from "../api/hooks";
 import type { Concept, ConceptPayload, LayerPayload } from "../api/types";
 import { GROUNDING_LABEL, GroundingGlyph } from "../design/GroundingGlyph";
 import { Button, Chip, Drawer, Shimmer, Tabs, type TabItem } from "../design/primitives";
 import { currentLayerId, MASTER, useUI } from "../state/store";
 import { anchorLabel } from "./anchors";
+import { CodeTab } from "./CodeTab";
 import styles from "./detail.module.css";
+import { ExampleTab } from "./ExampleTab";
 import { ExplainTab } from "./ExplainTab";
+import { drawableGraph, GraphTab } from "./GraphTab";
 
 type Tab = "explain" | "code" | "example" | "graph";
 
@@ -57,19 +60,6 @@ function AlsoAppearsIn({
   return <p className={styles.also}>Also appears in {names.join(", ")}.</p>;
 }
 
-function CodeTab({ hasRepo, concept }: { hasRepo: boolean | null; concept: Concept | undefined }) {
-  if (hasRepo === false) return <p className={styles.note}>No code linked for this paper.</p>;
-  if (concept?.grounding === "concept_only") {
-    return (
-      <p className={styles.note}>
-        This idea isn&apos;t spelled out in the code; the implementation relies on it without a
-        line you could point to.
-      </p>
-    );
-  }
-  return <p className={styles.note}>Code for this concept isn&apos;t linked yet.</p>;
-}
-
 export function DetailDrawer() {
   const paperId = useUI((s) => s.paperId);
   const selectedId = useUI((s) => s.selectedId);
@@ -91,6 +81,11 @@ export function DetailDrawer() {
   const paper = usePaper(paperId).data ?? null;
   const title = useCachedTitles(paperId ?? "");
 
+  // The graph is generated in the background once the explanation is on screen; the tab appears
+  // only if there is something to draw. Code and Example are requested only when opened.
+  const [explainedFor, setExplainedFor] = useState<string | null>(null);
+  const graph = useGraph(paperId, conceptId, explainedFor !== null && explainedFor === conceptId);
+
   const payload = conceptQ.data ?? null;
   const concept: Concept | undefined =
     payload?.concept ?? (conceptId ? layer?.concepts[conceptId] : undefined);
@@ -100,7 +95,7 @@ export function DetailDrawer() {
     { id: "explain", label: "Explain" },
     { id: "code", label: "Code" },
     { id: "example", label: "Example" },
-    ...(payload?.details.graph ? [{ id: "graph" as const, label: "Graph" }] : []),
+    ...(payload?.details.graph || drawableGraph(graph.data) ? [{ id: "graph" as const, label: "Graph" }] : []),
   ];
   const activeTab: Tab = tabs.some((t) => t.id === tab) ? tab : "explain";
   const canJump = Boolean(concept?.has_layer && !concept.is_first_principle && concept.id !== layer?.layer.center);
@@ -165,12 +160,25 @@ export function DetailDrawer() {
               <Tabs<Tab> label="Details" items={tabs} value={activeTab} onChange={setTab} />
             </div>
             <div className={styles.body} role="tabpanel" aria-label={tabs.find((t) => t.id === activeTab)?.label}>
-              {activeTab === "explain" && <ExplainTab key={conceptId} paperId={paperId} conceptId={conceptId} />}
-              {activeTab === "code" && <CodeTab hasRepo={hasRepo} concept={concept} />}
-              {activeTab === "example" && (
-                <p className={styles.note}>No worked example for this concept yet.</p>
+              {activeTab === "explain" && (
+                <ExplainTab
+                  key={conceptId}
+                  paperId={paperId}
+                  conceptId={conceptId}
+                  onReady={() => setExplainedFor(conceptId)}
+                />
               )}
-              {activeTab === "graph" && <p className={styles.note}>The graph for this concept can&apos;t be shown yet.</p>}
+              {activeTab === "code" && (
+                <CodeTab
+                  key={conceptId}
+                  paperId={paperId}
+                  conceptId={conceptId}
+                  hasRepo={hasRepo}
+                  onShowExample={() => setTab("example")}
+                />
+              )}
+              {activeTab === "example" && <ExampleTab key={conceptId} paperId={paperId} conceptId={conceptId} />}
+              {activeTab === "graph" && <GraphTab key={conceptId} paperId={paperId} conceptId={conceptId} />}
             </div>
             {canJump && concept && (
               <footer className={styles.actions}>

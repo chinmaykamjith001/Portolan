@@ -1,7 +1,7 @@
 // Explain tab (spec §13.6): re-explain angles + the structured explanation with KaTeX math.
 // A 202 from the backend means "being written": show reserved skeleton lines until SSE lands it.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ApiError } from "../api/client";
 import { useExplanation } from "../api/hooks";
@@ -91,10 +91,22 @@ function Body({ explanation }: { explanation: Explanation }) {
   );
 }
 
-export function ExplainTab({ paperId, conceptId }: { paperId: string; conceptId: string }) {
+export function ExplainTab({
+  paperId,
+  conceptId,
+  onReady,
+}: {
+  paperId: string;
+  conceptId: string;
+  /** Called once the default explanation is on screen (the drawer then fetches the graph). */
+  onReady?: () => void;
+}) {
   const [angle, setAngle] = useState<Angle>("default");
   const q = useExplanation(paperId, conceptId, angle);
   const ready = q.data !== undefined && q.data !== null;
+  useEffect(() => {
+    if (ready && angle === "default") onReady?.();
+  }, [ready, angle, onReady]);
 
   return (
     <>
