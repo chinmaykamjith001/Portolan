@@ -458,7 +458,7 @@ def seed_demo() -> None:
     typer.echo(f"Open http://localhost:5173/?paper={paper_id}")
 
 
-RECORD_STEPS = ("master", "skeleton")
+RECORD_STEPS = ("master", "skeleton", "ground")
 
 
 @app.command()
@@ -488,7 +488,11 @@ def record(
         typer.echo("portolan.toml still has placeholder model ids. Run `portolan doctor` first.")
         raise typer.Exit(code=1)
     # §5.3: master 1-2, level-1 skeletons ~4, level-2 ~15, plus a few same-concept checks.
-    estimate = (2 if "master" in wanted else 0) + (25 if "skeleton" in wanted else 0)
+    estimate = (
+        (2 if "master" in wanted else 0)
+        + (25 if "skeleton" in wanted else 0)
+        + (15 if "ground" in wanted else 0)  # one per master-layer concept
+    )
     typer.echo(f"This will use up to ~{estimate} real Gemini requests (cached answers are free).")
     if estimate > 30 and not yes and not typer.confirm("Continue?", default=False):
         raise typer.Exit(code=1)
@@ -528,6 +532,24 @@ async def _record(raw: str, config: Config, db: Database, steps: list[str]) -> N
         typer.echo("Building skeletons two levels below the master layer…")
         made = await builder.ensure_frontier(MASTER, levels=2)
         typer.echo(f"  {len(made)} child layers")
+    if "ground" in steps:
+        from portolan.code.ensure import ensure_index
+        from portolan.detail.ground import ground_code
+        from portolan.store.repos import chosen_repo
+
+        repo = chosen_repo(db, doc.paper_id)
+        layer = store.get_layer(doc.paper_id, MASTER)
+        if repo is None or layer is None:
+            typer.echo("Skipping ground: needs a chosen repo and a master layer (run those first).")
+        else:
+            typer.echo("Cloning and indexing the code…")
+            if not await ensure_index(config, db, doc.paper_id, repo):
+                typer.echo("  couldn't download the code; nothing to ground.")
+            else:
+                typer.echo("Grounding each master-layer concept in the code…")
+                for cid in layer.concepts:
+                    g = await ground_code(doc, gateway, store, db, cid)
+                    typer.echo(f"  {cid}: {g.grounding} ({len(g.notes)} notes)")
     after = gateway.limiter.budget.today()
     used = sum(int(r["requests"]) for r in after) - sum(int(r["requests"]) for r in before)
     typer.echo(f"\nReal requests this run: {used} (calls answered from cache: free).")

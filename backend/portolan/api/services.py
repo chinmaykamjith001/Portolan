@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from portolan.chart.master import ChartBuilder
+from portolan.code.ensure import ensure_index
 from portolan.config import Config
 from portolan.detail.example import make_example
 from portolan.detail.explain import explain, explain_edge
@@ -88,6 +89,7 @@ class Services:
             "skeleton": self._skeleton,
             "explain": self._explain,
             "edge": self._edge,
+            "index": self._index,
             "ground": self._ground,
             "example": self._example,
             "graph": self._graph,
@@ -128,6 +130,19 @@ class Services:
         if chosen_repo(self.db, paper_id) is None and result.best is not None:
             choose_repo(self.db, paper_id, result.best)
         self.progress(paper_id, "finding_code", 40, result.status.message)
+        if chosen_repo(self.db, paper_id) is not None:
+            self.queue.submit("index", f"index:{paper_id}", priority="P1", paper_id=paper_id)
+
+    async def _index(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        repo = chosen_repo(self.db, paper_id)
+        if repo is None:
+            return
+        self.progress(paper_id, "finding_code", 45, "Reading the code")
+        ok = await ensure_index(self.config, self.db, paper_id, repo)
+        self.progress(
+            paper_id, "finding_code", 50, "Code ready" if ok else "Couldn't download the code"
+        )
 
     async def _chart_master(self, job: Job) -> None:
         paper_id = str(job.paper_id)
@@ -203,6 +218,9 @@ class Services:
         if doc is None:
             return
         concept_id = str(job.payload["concept_id"])
+        repo = chosen_repo(self.db, paper_id)
+        if repo is not None:
+            await ensure_index(self.config, self.db, paper_id, repo)  # no-op once indexed
         grounding = await ground_code(doc, self.gateway, self.chart, self.db, concept_id)
         self.details.save_grounding(paper_id, grounding)
         self.bus.publish(paper_id, "detail_ready", {"concept_id": concept_id, "part": "code"})
