@@ -15,10 +15,10 @@ fixtures. Rendered prompts are snapshot-tested.
 | `explain` | 1 | default | M5 | written (default angle) |
 | `explain_angle` | – | default | M6 | not written |
 | `edge_explain` | 1 | default | M5 | written |
-| `ground_code` | – | default | M6 | not written |
+| `ground_code` | 1 | default | M6 | written |
 | `rerank_spans` | – | fast | M3/M6 | not written |
-| `example_program` | – | default | M6 | not written |
-| `graph_program` | – | default | M6 | not written |
+| `example_program` | 1 | default | M6 | written |
+| `graph_program` | 1 | default | M6 | written |
 | `claims_extract` | – | strong | M8 | not written |
 | `claim_judge` | – | strong | M8 | not written |
 | `reverse_scan` | – | strong | M8 | not written |
