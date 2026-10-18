@@ -22,6 +22,7 @@
   --t-fast: 150ms; --t-std: 200ms; --t-jump: 300ms;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
+  --shadow: rgba(26, 26, 24, 0.08);   /* floating layers only (drawer, popover) */
   --font-sans: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
 }
@@ -29,4 +30,13 @@
   --bg: #0F1318; --surface: #161B21; --ink: #ECE8DF; --ink-2: #B9B4A9; --ink-3: #8D887E;
   --line: #262C34; --grid: #1D232A; --accent: #8FA8DA; --accent-soft: rgba(143, 168, 218, 0.22);
   --mismatch: #E07A5F; --mismatch-soft: #3A2318;
+  --shadow: rgba(0, 0, 0, 0.35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1318; --surface: #161B21; --ink: #ECE8DF; --ink-2: #B9B4A9; --ink-3: #8D887E;
+    --line: #262C34; --grid: #1D232A; --accent: #8FA8DA; --accent-soft: rgba(143, 168, 218, 0.22);
+    --mismatch: #E07A5F; --mismatch-soft: #3A2318;
+    --shadow: rgba(0, 0, 0, 0.35);
+  }
 }

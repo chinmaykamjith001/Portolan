@@ -1,0 +1,132 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease);
+}
+
+.button:hover {
+  border-color: var(--ink-3);
+}
+
+.button:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.quiet:hover {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.tab {
+  padding: var(--space-1) 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-2);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.tab:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  width: 400px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: 0 2px 12px var(--shadow);
+  transform: translateX(100%);
+  transition: transform var(--t-std) var(--ease), width var(--t-std) var(--ease);
+}
+
+.drawerOpen {
+  transform: translateX(0);
+}
+
+.drawerWide {
+  width: 520px;
+}
+
+.popover {
+  position: absolute;
+  z-index: 30;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px var(--shadow);
+  animation: appear var(--t-fast) var(--ease);
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.shimmer {
+  display: block;
+  height: 0.8em;
+  margin: 0.35em 0;
+  border-radius: 3px;
+  background: var(--line);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.chip {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}

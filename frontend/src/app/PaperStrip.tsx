@@ -1,0 +1,69 @@
+import type { LiveState } from "../api/hooks";
+import type { PaperInfo } from "../api/types";
+import { Tabs } from "../design/primitives";
+import { useUI, type View } from "../state/store";
+import styles from "./shell.module.css";
+
+const STAGES = [
+  { id: "reading", label: "Reading paper" },
+  { id: "finding_code", label: "Finding code" },
+  { id: "building_map", label: "Building map" },
+] as const;
+
+function Progress({ live, paper }: { live: LiveState; paper: PaperInfo | null | undefined }) {
+  const stage = live.progress?.stage;
+  if (paper?.chart_ready && (!stage || live.progress?.percent === 100)) return null;
+  const now = STAGES.findIndex((s) => s.id === stage);
+  return (
+    <span className={styles.progress} aria-live="polite">
+      {STAGES.map((s, i) => (
+        <span key={s.id} className={i < now ? styles.stageDone : i === now ? styles.stageNow : undefined}>
+          {i > 0 && "→ "}
+          {s.label}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function PaperStrip({ paper, live }: { paper: PaperInfo | null | undefined; live: LiveState }) {
+  const view = useUI((s) => s.view);
+  const setView = useUI((s) => s.setView);
+  const waiting = live.rateLimitedUntil !== null && live.rateLimitedUntil > Date.now();
+  const seconds = waiting ? Math.ceil(((live.rateLimitedUntil ?? 0) - Date.now()) / 1000) : 0;
+  const authors = paper?.authors ?? [];
+  return (
+    <section className={styles.strip} aria-label="Paper">
+      <h1 className={styles.title}>{paper?.title ?? "Reading paper…"}</h1>
+      {authors.length > 0 && (
+        <span className={styles.meta}>
+          {authors.slice(0, 4).join(", ")}
+          {authors.length > 4 ? ` +${authors.length - 4}` : ""}
+        </span>
+      )}
+      {paper?.arxiv_id && (
+        <span className={styles.mono}>
+          arXiv:{paper.arxiv_id}
+          {paper.version ?? ""}
+        </span>
+      )}
+      {paper?.repo_status && <span className={styles.meta}>{paper.repo_status.message}</span>}
+      {paper?.low_structure && <span className={styles.notice}>Parsed from PDF; structure may be approximate.</span>}
+      <div className={styles.views}>
+        <Tabs<View>
+          label="Views"
+          value={view}
+          onChange={setView}
+          items={[
+            { id: "chart", label: "Chart" },
+            { id: "route", label: "Route" },
+            { id: "faq", label: "FAQ" },
+          ]}
+        />
+        <Progress live={live} paper={paper} />
+        {waiting && <span className={styles.notice}>Waiting for the free-tier rate limit (~{seconds} s)</span>}
+        {live.lastError && <span className={styles.notice}>{live.lastError}</span>}
+      </div>
+    </section>
+  );
+}
