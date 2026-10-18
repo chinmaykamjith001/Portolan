@@ -86,13 +86,28 @@ function Block({ block }: { block: CodeBlock }) {
   );
 }
 
-/** Where the checker's verdict on this concept will go (M8); nothing to show until then. */
-function VerdictBox({ verdict }: { verdict: Verdict | null }) {
+/** The checker's verdict on this concept, with the evidence behind it (paper side vs code side). */
+function VerdictBox({ verdict, evidence }: { verdict: Verdict | null; evidence?: string }) {
   if (verdict === null) return null;
+  const headline =
+    verdict === "mismatch"
+      ? "The code differs from the paper here."
+      : verdict === "undocumented"
+        ? "The code does something the paper doesn't describe."
+        : "The code matches the paper here.";
   return (
-    <p className={verdict === "mismatch" ? styles.verdictBoxMismatch : styles.verdictBox}>
-      {verdict === "mismatch" ? "! The code differs from the paper here." : "The code matches the paper here."}
-    </p>
+    <div className={verdict === "mismatch" ? styles.verdictBoxMismatch : styles.verdictBox} role="note">
+      <p className={styles.verdictHead}>
+        {verdict === "mismatch" && (
+          <span className={styles.bang} aria-hidden="true">
+            !
+          </span>
+        )}
+        {verdict === "undocumented" && <span aria-hidden="true">+ </span>}
+        {headline}
+      </p>
+      {evidence && <p className={styles.verdictEvidence}>{evidence}</p>}
+    </div>
   );
 }
 
@@ -121,7 +136,17 @@ function ConceptOnly({ onShowExample }: { onShowExample: () => void }) {
   );
 }
 
-function Grounded({ g, verdict, onShowExample }: { g: CodeGrounding; verdict: Verdict | null; onShowExample: () => void }) {
+function Grounded({
+  g,
+  verdict,
+  evidence,
+  onShowExample,
+}: {
+  g: CodeGrounding;
+  verdict: Verdict | null;
+  evidence?: string | undefined;
+  onShowExample: () => void;
+}) {
   if (g.grounding === "concept_only") return <ConceptOnly onShowExample={onShowExample} />;
   const blocks = buildBlocks(g);
   if (blocks.length === 0 && g.library_calls.length === 0) return <ConceptOnly onShowExample={onShowExample} />;
@@ -141,7 +166,7 @@ function Grounded({ g, verdict, onShowExample }: { g: CodeGrounding; verdict: Ve
       {blocks.map((b) => (
         <Block key={`${b.path}:${b.start}`} block={b} />
       ))}
-      <VerdictBox verdict={verdict} />
+      <VerdictBox verdict={verdict} evidence={evidence} />
     </>
   );
 }
@@ -151,6 +176,7 @@ export function CodeTab({
   conceptId,
   hasRepo,
   verdict = null,
+  evidence,
   onShowExample,
 }: {
   paperId: string;
@@ -158,6 +184,7 @@ export function CodeTab({
   /** null while the paper is still loading */
   hasRepo: boolean | null;
   verdict?: Verdict | null;
+  evidence?: string | undefined;
   onShowExample: () => void;
 }) {
   // No request until we know there is a repo to look in (free-tier budget).
@@ -180,7 +207,7 @@ export function CodeTab({
   }
   return (
     <div aria-live="polite">
-      <Grounded g={q.data} verdict={verdict} onShowExample={onShowExample} />
+      <Grounded g={q.data} verdict={verdict} evidence={evidence} onShowExample={onShowExample} />
     </div>
   );
 }

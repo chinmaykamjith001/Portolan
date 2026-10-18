@@ -1,6 +1,7 @@
 import type { LiveState } from "../api/hooks";
 import type { PaperInfo } from "../api/types";
 import { Tabs } from "../design/primitives";
+import { FindingsControl } from "../findings/FindingsControl";
 import { useUI, type View } from "../state/store";
 import styles from "./shell.module.css";
 
@@ -48,6 +49,7 @@ export function PaperStrip({ paper, live }: { paper: PaperInfo | null | undefine
         </span>
       )}
       {paper?.repo_status && <span className={styles.meta}>{paper.repo_status.message}</span>}
+      <FindingsControl paper={paper} />
       {paper?.low_structure && <span className={styles.notice}>Parsed from PDF; structure may be approximate.</span>}
       <div className={styles.views}>
         <Tabs<View>

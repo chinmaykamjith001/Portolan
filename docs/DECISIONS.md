@@ -280,3 +280,62 @@ _None yet._
   audit hook is a guard rail, not a security boundary against a determined attacker — the
   Docker mode in the spec (`sandbox.mode = "docker"`) remains the stronger option and is not built.
   Programs are LLM-written from paper text, so untrusted-input prompt injection is the threat model.
+
+## M10 — SciCoQA evaluation harness
+
+- **The dataset format is unverified.** github.com was unreachable when the harness was written, so
+  `evalharness/adapters.py` maps fields through a documented alias table instead of the official
+  schema, reports every row it can't map, and `portolan eval --inspect PATH` shows what was detected.
+  The owner must check it against the real download before trusting any number.
+- **The matcher is ours, not the benchmark's.** A prediction (`mismatch` / `undocumented_in_paper`)
+  matches a gold discrepancy by code location (same file, within 5 lines) or by word overlap (Dice
+  ≥ 0.35, ≥ 2 shared words), one-to-one. Pluggable (`Matcher`); replace it if the official scorer
+  differs. Precision is a lower bound when the gold list is incomplete.
+- **Resume = append-only JSONL keyed by (record id, engine version).** The engine version is a hash of
+  `verify/*.py` and the claim/verify/judge prompts, so changing the engine never reuses old results
+  (old lines stay). Failed records are retried by default; unfinished records (budget stop) leave no line.
+- **Per-record cost estimate: 15 requests** (the pessimistic end of §5.3's 10-15 for verification);
+  the report prints the measured number. Confirmation is asked above 30 requests.
+- **Dry run** (`--dry-run`) uses a fake engine on invented sample data and a throwaway checkpoint
+  folder; its report is stamped "TEST RUN — not a result" and `write_report` refuses it.
+- **Known gap: no commit pinning.** `repo.cloner.clone` checks out the default branch, so records that
+  name another commit are indexed at HEAD; the report notes each such record. Pinning would be a change
+  to the cloner, not to the harness.
+- **Known gap:** the real engine runs `verify_paper` with an empty chart, which is meant to work
+  (verification is independent of the Chart, §10.9) but could not be exercised here because the
+  engine was still being written; the real path is covered only with injected fakes.
+
+## M9 — FAQ backend
+
+- **External response shapes are from documentation, not from a live call.** The container that built
+  this had no route to openreview.net or github.com. `faq/sources.py` therefore parses defensively and
+  is covered only by mocked responses (`tests/test_faq_sources.py`). Assumed OpenReview API v2 shapes:
+  `GET /notes/search?term=<title>&content=title&source=forum` returns `{"notes": [...]}` with each
+  note's `content.title.value`; `GET /notes?forum=<id>&limit=1000` returns the whole thread; a review
+  has an invitation ending `Official_Review` and its questions in `content.questions.value`; an author
+  reply is any note whose `signatures` contain `Authors` and whose `replyto` chain reaches the review.
+  Plain (v1-style) string values are accepted too. GitHub: `GET /repos/{o}/{n}/issues` (PRs carry a
+  `pull_request` key) and `/issues/{n}/comments` with `author_association`. **The owner should run
+  `pytest -m network tests/test_network_faq.py -s` once**; if it fails, fix `_val`, `_is_review` and
+  `_is_author` in `faq/sources.py` against what it prints.
+- **Only answered reviewer questions become items.** A question with no author reply says nothing yet;
+  the whole author thread under the review is handed to the model, which sets `keep=false` when the
+  reply doesn't address that question.
+- **Findings answer themselves.** A `mismatch` or `undocumented_in_paper` finding becomes "Does the code
+  use X as in the paper?" with its own evidence as the answer: no request. They are listed first.
+- **Clustering is lexical** (Jaccard ≥ 0.55 over stemmed content words). Embeddings are not used, so the
+  default install behaves the same as one with the extra; a finding outranks a reviewer, a reviewer an issue.
+- **Request budget per build ≤ 4** (P2): at most 18 clusters in batches of 6 = 3 answer calls, plus one
+  anticipated call, skipped when 80% of the day's requests are used or the provider already failed.
+  The Ask box is one P0 call, or none when retrieval finds nothing relevant.
+- **Every answer cites an anchor or a URL.** Anchors the model cites must be among the passages it was
+  given (invented ones are dropped); anticipated answers, which have no URL, are dropped when no valid
+  anchor remains. Ids are a hash of source + exact question text + URL, so a rebuild replaces instead of
+  duplicating; answers come from the gateway cache on a second run.
+- **Concept links** use shared anchors first (weight 3), then the section enclosing a cited paragraph
+  (1), then the concept title appearing in the text (1); at most 3.
+- **Ask box says "The paper and code don't answer this."** (`supported=false`) when retrieval is empty,
+  the model declines, or its citations don't survive validation. Asked items are saved into the FAQ.
+- **Not done:** paper-page discussions (the spec's optional source 3); `record --steps faq` can only
+  capture reviewer and issue answers on a machine that can reach those sites.
+

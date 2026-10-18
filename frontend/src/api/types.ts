@@ -17,6 +17,8 @@ export interface Concept {
   has_layer: boolean;
   gen_state: GenState;
   issue_count_self: number;
+  /** Findings in the sub-map below this concept (M8). */
+  issues_inside?: number;
 }
 
 export interface Link {

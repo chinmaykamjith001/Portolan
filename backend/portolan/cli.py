@@ -459,7 +459,9 @@ def seed_demo() -> None:
 
 
 DETAIL_STEPS = ("explain", "ground", "example", "graph")
-RECORD_STEPS = ("master", "skeleton", "explain", "ground", "example", "graph")
+RECORD_STEPS = (
+    "master", "skeleton", "explain", "ground", "example", "graph", "route", "faq", "verify",
+)  # fmt: skip
 
 
 @app.command()
@@ -493,6 +495,9 @@ def record(
         (2 if "master" in wanted else 0)
         + (25 if "skeleton" in wanted else 0)
         + 15 * len([s for s in wanted if s in DETAIL_STEPS])  # one per master-layer concept
+        + (4 if "faq" in wanted else 0)  # up to 3 answer batches + 1 anticipated batch
+        + (9 if "route" in wanted else 0)  # one per top-level section
+        + (18 if "verify" in wanted else 0)  # <= 6 extraction + <= 10 judge batches + 1 reverse
     )
     typer.echo(f"This will use up to ~{estimate} real Gemini requests (cached answers are free).")
     if estimate > 30 and not yes and not typer.confirm("Continue?", default=False):
@@ -578,12 +583,76 @@ async def _record(raw: str, config: Config, db: Database, steps: list[str]) -> N
                     except Exception as exc:  # one bad concept must not waste the rest of the run
                         typer.echo(f"  {title}: {st} failed ({exc})")
                 typer.echo(f"  done: {title}")
+    if "verify" in steps:
+        from portolan.code.ensure import ensure_index
+        from portolan.store.findings import FindingStore
+        from portolan.store.repos import chosen_repo
+        from portolan.verify.engine import verify_paper
+
+        repo = chosen_repo(db, doc.paper_id)
+        typer.echo("Cloning and indexing the code…")
+        if repo is None or not await ensure_index(config, db, doc.paper_id, repo):
+            typer.echo("  no code to verify against; skipping verify.")
+        else:
+            FindingStore(db).delete_paper(doc.paper_id)  # a recording run starts clean
+            typer.echo("Checking the paper's claims against the code…")
+            await verify_paper(
+                doc, gateway, store, db,
+                lambda f: typer.echo(f"  {f.verdict:<22} {f.claim_text[:70]}"),
+            )  # fmt: skip
+            counts: dict[str, int] = {}
+            for f in FindingStore(db).all(doc.paper_id):
+                counts[f.verdict] = counts.get(f.verdict, 0) + 1
+            typer.echo("  " + (", ".join(f"{n} {v}" for v, n in sorted(counts.items())) or "none"))
+    if "route" in steps:
+        from portolan.route.build import build_main_route
+        from portolan.store.routes import RouteStore
+
+        typer.echo("Writing the Route (one request per top-level section)…")
+        routes = RouteStore(db)
+        route = await build_main_route(doc, gateway, store, routes)
+        routes.save(route)
+        openable = sum(1 for s in route.stops if s.sub_route_id)
+        typer.echo(f"  {len(route.stops)} stops, {openable} that open into a sub-route")
+    if "faq" in steps:
+        from portolan.faq.build import build_faq
+
+        typer.echo("Building the FAQ (reviewer discussion, GitHub issues, findings, anticipated)…")
+        kinds: list[str] = []
+        async with PoliteClient(db, contact=config.http.contact) as faq_http:
+            await build_faq(
+                doc, gateway, store, db, faq_http, lambda item: kinds.append(item.source_kind)
+            )
+        typer.echo(f"  {len(kinds)} items: " + (", ".join(sorted(set(kinds))) or "none"))
     after = gateway.limiter.budget.today()
     used = sum(int(r["requests"]) for r in after) - sum(int(r["requests"]) for r in before)
     typer.echo(f"\nReal requests this run: {used} (calls answered from cache: free).")
     for w in builder.build.warnings:
         typer.echo(f"  warning: {w}")
     typer.echo(f"Fixtures written under {DEFAULT_FIXTURES}")
+
+
+@app.command("eval")
+def eval_command(
+    data: str | None = typer.Option(None, "--data", help="SciCoQA download (folder or file)."),
+    limit: int = typer.Option(25, help="How many records to run (0 = all)."),
+    split: str = typer.Option("all", help="all | real | synthetic"),
+    seed: int = typer.Option(0, help="Sampling seed: same seed, same records."),
+    out: str | None = typer.Option(None, help="Checkpoint folder (default eval/runs)."),
+    report_dir: str | None = typer.Option(None, help="Report folder (default eval/reports)."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Don't ask before spending requests."),
+    fresh: bool = typer.Option(False, help="Ignore saved results and start over."),
+    dry_run: bool = typer.Option(False, help="Fake engine on the sample data: no requests."),
+    inspect: str | None = typer.Option(None, help="Show how a dataset is read, then stop."),
+    retry_failed: bool = typer.Option(True, help="Run records that failed last time again."),
+) -> None:
+    """Measure the verification engine on SciCoQA (resumable, stops when the daily budget ends)."""
+    from portolan.evalharness.commands import run_eval
+
+    run_eval(
+        data=data, limit=limit, split=split, seed=seed, out=out, report_dir=report_dir, yes=yes,
+        fresh=fresh, dry_run=dry_run, inspect=inspect, retry_failed=retry_failed,
+    )  # fmt: skip
 
 
 if __name__ == "__main__":

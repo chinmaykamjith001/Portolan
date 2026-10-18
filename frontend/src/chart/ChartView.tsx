@@ -37,6 +37,7 @@ import styles from "./chart.module.css";
 import { ConceptEdge, type ConceptEdgeType } from "./ConceptEdge";
 import { canJumpInto, ConceptNode, describeConcept, type ConceptNodeType } from "./ConceptNode";
 import { cachedLayer, layerQuery } from "./data";
+import { resolveChartPath } from "./focus";
 import { EdgePopover } from "./EdgePopover";
 import { layoutInputFor, sizeOf, type Positions } from "./layout";
 import { useLayout } from "./layoutClient";
@@ -84,8 +85,8 @@ function fitFor(shown: Shown, w: number, h: number): Viewport {
   return getViewportForBounds(bounds(shown), Math.max(w, 1), Math.max(h, 1), MIN_ZOOM, FIT_MAX_ZOOM, FIT_PADDING);
 }
 
-function centeredOn(x: number, y: number, zoom: number, w: number, h: number): Viewport {
-  return { x: w / 2 - x * zoom, y: h / 2 - y * zoom, zoom };
+function centeredOn(x: number, y: number, zoom: number, w: number, h: number, padRight = 0): Viewport {
+  return { x: (w - padRight) / 2 - x * zoom, y: h / 2 - y * zoom, zoom };
 }
 
 /** Stagger delays for the jump-in fade: nearest to the center first, ≤ 25 ms apart, capped. */
@@ -182,9 +183,12 @@ interface CanvasProps {
   onHoverConcept?: (conceptId: string) => void;
   /** Findings inside each concept's sub-map (M8). */
   issuesInside?: Record<string, number>;
+  /** Bring this concept into view once its layer is on screen ("Show on Chart"), then call `onRevealed`. */
+  reveal?: string | null;
+  onRevealed?: () => void;
 }
 
-function Scene({ paperId, layerId, payload, status, onHoverConcept, issuesInside }: CanvasProps) {
+function Scene({ paperId, layerId, payload, status, onHoverConcept, issuesInside, reveal = null, onRevealed }: CanvasProps) {
   const rf = useReactFlow<ConceptNodeType, ConceptEdgeType>();
   const qc = useQueryClient();
   const width = useStore((s) => s.width);
@@ -327,6 +331,27 @@ function Scene({ paperId, layerId, payload, status, onHoverConcept, issuesInside
     [shown],
   );
 
+  // Show on Chart: once the concept's layer has settled, center it (left of the open drawer).
+  useEffect(() => {
+    if (!reveal || !shown || shown.layerId !== layerId) return;
+    const p = shown.positions[reveal];
+    if (!p) {
+      onRevealed?.();
+      return;
+    }
+    const timer = window.setTimeout(
+      () => {
+        const { w, h } = size.current;
+        const pad = useUI.getState().drawerOpen ? 420 : 0;
+        const zoom = Math.min(MAX_ZOOM, Math.max(rf.getViewport().zoom, 0.9));
+        void rf.setViewport(centeredOn(p.x, p.y, zoom, w, h, pad), { duration: prefersReducedMotion() ? 0 : 250 });
+        onRevealed?.();
+      },
+      prefersReducedMotion() ? 0 : T + 60,
+    );
+    return () => window.clearTimeout(timer);
+  }, [reveal, shown, layerId, rf, onRevealed]);
+
   // Keyboard (spec §13.10). Esc is global (App.tsx → store.escape).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -454,6 +479,32 @@ export default function ChartView() {
   const layerId = useUI(currentLayerId);
   const qc = useQueryClient();
   const query = useLayer(paperId, layerId);
+  const pendingFocus = useUI((s) => s.pendingFocus);
+  const clearFocus = useUI((s) => s.clearFocus);
+  const [reveal, setReveal] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  // "Show on Chart": jump through the layers down to the concept, select it, then reveal it.
+  const wanted = pendingFocus?.view === "chart" ? pendingFocus.conceptId : null;
+  useEffect(() => {
+    if (wanted === null || !paperId) return;
+    let live = true;
+    void resolveChartPath(qc, paperId, wanted).then((path) => {
+      if (!live) return;
+      clearFocus();
+      if (path === null) {
+        setNote("Couldn't find that idea on the map.");
+        return;
+      }
+      setNote(null);
+      useUI.setState({ path, selectedId: wanted, drawerOpen: true, edge: null, cameFrom: null });
+      setReveal(wanted);
+    });
+    return () => {
+      live = false;
+    };
+  }, [wanted, paperId, qc, clearFocus]);
+  const revealed = useCallback(() => setReveal(null), []);
   const prefetch = useCallback(
     (conceptId: string) => {
       if (paperId) void qc.prefetchQuery(layerQuery(paperId, conceptId));
@@ -462,7 +513,7 @@ export default function ChartView() {
   );
   if (!paperId) return null;
 
-  let status: ReactNode = null;
+  let status: ReactNode = note;
   if (query.isError) {
     status = (
       <>
@@ -483,6 +534,8 @@ export default function ChartView() {
       payload={query.data ?? null}
       status={status}
       onHoverConcept={prefetch}
+      reveal={reveal}
+      onRevealed={revealed}
     />
   );
 }

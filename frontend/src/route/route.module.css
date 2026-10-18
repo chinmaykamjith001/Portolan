@@ -1,0 +1,403 @@
+/* Route view (spec §13.5, §14). Tokens only. */
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  --xy-background-color: var(--bg);
+  --xy-edge-stroke: var(--ink-3);
+  --xy-attribution-background-color: transparent;
+}
+
+.canvas :global(.react-flow__viewport) {
+  opacity: var(--layer-opacity, 1);
+  transition: opacity var(--layer-fade, 300ms) var(--ease);
+}
+
+.canvas :global(.react-flow__pane) {
+  cursor: default;
+}
+
+.canvas :global(.react-flow__pane.dragging) {
+  cursor: grabbing;
+}
+
+.canvas :global(.react-flow__attribution),
+.canvas :global(.react-flow__attribution a) {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.canvas :global(.react-flow__node) {
+  border-radius: var(--radius);
+}
+
+.canvas :global(.react-flow__node:focus-visible) {
+  outline: none;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 var(--space-4);
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
+/* ---------- stops ---------- */
+
+.stop {
+  position: relative;
+  width: 232px;
+  height: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+.stop:hover {
+  border-color: var(--ink-2);
+}
+
+.current {
+  border-color: var(--accent);
+  border-width: 2px;
+  padding: calc(var(--space-2) - 1px) calc(var(--space-3) - 1px);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.mismatch {
+  border-color: var(--mismatch);
+}
+
+.current.mismatch {
+  border-color: var(--accent);
+}
+
+.enter {
+  animation: stopIn 150ms var(--ease) both;
+}
+
+@keyframes stopIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+}
+
+.num {
+  min-width: 18px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.section {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marks {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  color: var(--ink);
+}
+
+.glyph {
+  display: inline-flex;
+}
+
+.mismatchGlyph {
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--mismatch);
+  color: var(--surface);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.recurrence {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.jump {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.jump:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Appendix side road: a short branch below the stop, with its label. */
+.sideRoad {
+  position: absolute;
+  left: 70%;
+  top: 100%;
+  display: flex;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.sideStub {
+  width: 1px;
+  height: 22px;
+  background: var(--ink-3);
+}
+
+.sideLabel {
+  margin: 14px 0 0 var(--space-1);
+  padding: 0 var(--space-1);
+  background: var(--bg);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+/* ---------- segment markers ---------- */
+
+.marker {
+  width: 190px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.markerLeft {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.marker span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- connectors ---------- */
+
+.roadPath {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1.5;
+}
+
+.roadArrow {
+  fill: var(--ink-3);
+}
+
+.roadTraveled .roadPath {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.roadTraveled .roadArrow {
+  fill: var(--accent);
+}
+
+.roadLabel {
+  position: absolute;
+  max-width: 170px;
+  padding: 0 var(--space-1);
+  background: var(--bg);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.3;
+  text-align: center;
+  pointer-events: none;
+}
+
+.roadLabelTraveled {
+  color: var(--accent);
+}
+
+/* ---------- floating chrome ---------- */
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-width: min(720px, calc(100vw - 48px));
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+
+.crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crumbs li {
+  display: flex;
+  align-items: center;
+}
+
+.crumbSep {
+  margin: 0 var(--space-2);
+  color: var(--ink-3);
+}
+
+.crumbCurrent {
+  font-weight: 500;
+}
+
+.crumbStatus {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.position {
+  padding: 0 var(--space-1);
+  background: var(--bg);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.textButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line);
+  cursor: pointer;
+}
+
+.textButton:hover {
+  color: var(--ink);
+  text-decoration-color: var(--ink-3);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- drawer: what the paper says here ---------- */
+
+.summary {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.summaryHead {
+  margin: 0 0 var(--space-1);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.summaryText {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.summaryMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.recur {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}

@@ -81,7 +81,8 @@ export function describeConcept(c: Concept, center: boolean, jumpable: boolean):
 
 function ConceptNodeImpl({ id, data }: NodeProps<ConceptNodeType>) {
   const selected = useUI((s) => s.selectedId === id);
-  const { concept: c, center, size, childCount, issuesInside, enterDelay } = data;
+  const { concept: c, center, size, childCount, enterDelay } = data;
+  const issuesInside = Math.max(data.issuesInside, c.issues_inside ?? 0);
   const jumpable = canJumpInto(c, center);
   const mismatch = c.issue_count_self > 0;
   const gistPending = c.gen_state === "generating" || !c.gist;

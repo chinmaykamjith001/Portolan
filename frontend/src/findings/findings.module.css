@@ -1,0 +1,160 @@
+.control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.control:hover {
+  color: var(--ink);
+}
+
+.controlMismatch {
+  color: var(--mismatch);
+  font-weight: 500;
+}
+
+.panel {
+  position: absolute;
+  top: 64px;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 25;
+  width: 400px;
+  max-width: calc(100% - 2 * var(--space-4));
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px var(--shadow);
+  overflow-y: auto;
+  animation: appear var(--t-fast) var(--ease);
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.title:focus {
+  outline: none;
+}
+
+.lead {
+  margin: var(--space-1) 0 var(--space-3);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.rowMismatch .verdict {
+  color: var(--mismatch);
+}
+
+.verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.confidence {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.claim {
+  margin: 0 0 var(--space-1);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.evidence {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.span {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+a.span {
+  color: var(--ink);
+  text-underline-offset: 3px;
+}
+
+.show {
+  margin-left: auto;
+}
+
+.quiet {
+  margin: 0 0 var(--space-3);
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.toggle {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  color: var(--ink);
+}

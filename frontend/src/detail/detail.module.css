@@ -478,6 +478,16 @@
   color: var(--ink-2);
 }
 
+.verdictHead {
+  margin: 0;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.verdictEvidence {
+  margin: var(--space-1) 0 0;
+}
+
 .verdictBoxMismatch {
   border-color: var(--mismatch);
   background: var(--mismatch-soft);

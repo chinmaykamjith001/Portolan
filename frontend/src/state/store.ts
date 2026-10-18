@@ -32,11 +32,24 @@ export interface UIState {
   cameFrom: string | null;
   findingsOpen: boolean;
   pendingFocus: PendingFocus | null;
+  /** Route view: stop ids jumped into, outermost first. [] means the main route. A sub-route's id
+   * is the id of the stop it opens (spec §9.5), so this is also the list of route ids. */
+  routePath: string[];
+  /** Route view: the current stop (highlighted; its details are in the drawer). */
+  stopId: string | null;
+  /** The stop we just came back out of (selected after Back). */
+  cameFromStop: string | null;
 
   setFindingsOpen: (open: boolean) => void;
   /** Switch to `view` and ask it to reveal `conceptId`; the view clears it when done. */
   focusConcept: (conceptId: string, view: "chart" | "route") => void;
   clearFocus: () => void;
+  /** Make `stop` current (and select its concept, if it has one). */
+  selectStop: (stop: { id: string; concept_id: string | null } | null, openDrawer?: boolean) => void;
+  routeJumpIn: (stopId: string) => void;
+  routeBack: () => void;
+  routeJumpTo: (depth: number) => void; // breadcrumb click: keep routePath[0..depth)
+  clearCameFromStop: () => void;
   setPaper: (paperId: string | null) => void;
   setView: (view: View) => void;
   select: (conceptId: string | null, openDrawer?: boolean) => void;
@@ -63,7 +76,38 @@ export const useUI = create<UIState>((set, get) => ({
   cameFrom: null,
   findingsOpen: false,
   pendingFocus: null,
+  routePath: [],
+  stopId: null,
+  cameFromStop: null,
 
+  selectStop: (stop, openDrawer = true) =>
+    set({
+      stopId: stop?.id ?? null,
+      selectedId: stop?.concept_id ?? null,
+      drawerOpen: stop !== null && openDrawer,
+      edge: null,
+    }),
+  routeJumpIn: (stopId) =>
+    set((s) => ({
+      routePath: [...s.routePath, stopId],
+      stopId: null,
+      selectedId: null,
+      drawerOpen: false,
+      cameFromStop: null,
+    })),
+  routeBack: () =>
+    set((s) => {
+      const from = s.routePath[s.routePath.length - 1];
+      if (from === undefined) return s;
+      return { routePath: s.routePath.slice(0, -1), stopId: from, cameFromStop: from, drawerOpen: false };
+    }),
+  routeJumpTo: (depth) =>
+    set((s) => {
+      const from = s.routePath[depth];
+      if (from === undefined) return s;
+      return { routePath: s.routePath.slice(0, depth), stopId: from, cameFromStop: from, drawerOpen: false };
+    }),
+  clearCameFromStop: () => set({ cameFromStop: null }),
   setFindingsOpen: (findingsOpen) => set({ findingsOpen }),
   focusConcept: (conceptId, view) => set({ view, pendingFocus: { conceptId, view }, edge: null }),
   clearFocus: () => set({ pendingFocus: null }),
@@ -77,8 +121,11 @@ export const useUI = create<UIState>((set, get) => ({
       cameFrom: null,
       findingsOpen: false,
       pendingFocus: null,
+      routePath: [],
+      stopId: null,
+      cameFromStop: null,
     }),
-  setView: (view) => set({ view, edge: null }),
+  setView: (view) => set({ view, edge: null, drawerOpen: false }),
   select: (conceptId, openDrawer = true) =>
     set({ selectedId: conceptId, drawerOpen: conceptId !== null && openDrawer, edge: null }),
   closeDrawer: () => set({ drawerOpen: false }),
@@ -106,8 +153,10 @@ export const useUI = create<UIState>((set, get) => ({
   closeEdge: () => set({ edge: null }),
   escape: () => {
     const s = get();
-    if (s.edge) set({ edge: null });
+    if (s.findingsOpen) set({ findingsOpen: false });
+    else if (s.edge) set({ edge: null });
     else if (s.drawerOpen) set({ drawerOpen: false });
+    else if (s.view === "route") s.routeBack();
     else s.back();
   },
 }));
