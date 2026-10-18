@@ -189,3 +189,28 @@ roll-up; the builder, record CLI, API and recording done here.
 committed), then four parallel pieces: sandbox + security tests; code grounding (prompt, validation,
 endpoint); examples + graph templates (prompts, sandbox use); frontend Code / Example / Graph tabs with
 arrow callouts and an in-house SVG graph renderer.
+
+## M6 — Node details ✅ (2026-10-18)
+
+**Done / verified**
+- Sandbox (ast vetting, rlimits, audit hook, no network where `unshare` works): 64 tests incl. forbidden
+  imports, infinite loop, memory bomb, hidden environment.
+- Code grounding with validated line notes (out-of-span notes dropped; one retry; `concept_only` fallback),
+  index job (clone + index the chosen repo), executed-only examples and graphs (a test asserts an
+  LLM-typed number never reaches the UI), Code / Example / Graph tabs with arrow callouts, SVG graphs.
+- 476 backend tests, 107 frontend tests, 9 Playwright tests (mock provider, seeded demo paper).
+
+**Not done / known gaps**
+- **No real recordings for M6.** arXiv and GitHub are blocked by this environment's network policy, so
+  the papers and repos couldn't be fetched. Run locally (owner): see "Recording" below.
+- Explanation history control (backend keeps one version per angle). Real syntax colors (no Shiki).
+
+**Recording (owner, local, uses the free key): ~15 requests per step per paper**
+`make record ARGS="--paper 2106.09685 --steps explain,ground,example,graph --yes"` (~60 requests) and the
+same for `1706.03762`. `ground` needs the repo cloned and indexed first (the command does it).
+
+## M7–M9 (in progress)
+
+**Plan**: contracts first (models, migrations 8-10, stores, job handlers and triggers, routers, frontend
+types/hooks, store fields, placeholder views — committed), then parallel pieces: Route backend + view,
+verification engine + findings UI, FAQ backend + view, SciCoQA eval harness.

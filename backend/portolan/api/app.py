@@ -11,7 +11,10 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from portolan import __version__
+from portolan.api.faq_api import router as faq_router
+from portolan.api.findings_api import router as findings_router
 from portolan.api.papers import router as papers_router
+from portolan.api.route_api import router as route_router
 from portolan.api.services import Services
 from portolan.config import Config, api_key_present, load_config
 from portolan.ingest.http import PoliteClient
@@ -63,6 +66,9 @@ def create_app(config: Config | None = None, services: Services | None = None) -
 
     app = FastAPI(title="Portolan", version=__version__, lifespan=lifespan)
     app.include_router(papers_router)
+    app.include_router(route_router)
+    app.include_router(findings_router)
+    app.include_router(faq_router)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(_request: Request, exc: StarletteHTTPException) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]

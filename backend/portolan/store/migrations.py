@@ -258,4 +258,53 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        8,
+        "routes",
+        """
+        CREATE TABLE routes (
+            paper_id TEXT NOT NULL,
+            route_id TEXT NOT NULL,
+            route_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (paper_id, route_id)
+        );
+        """,
+    ),
+    (
+        9,
+        "findings",
+        """
+        CREATE TABLE findings (
+            paper_id TEXT NOT NULL,
+            finding_id TEXT NOT NULL,
+            finding_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (paper_id, finding_id)
+        );
+
+        -- One row per paper: where a (resumable) verification run stands.
+        CREATE TABLE verification_runs (
+            paper_id TEXT PRIMARY KEY,
+            state TEXT NOT NULL,          -- running | done | failed
+            repo_commit TEXT,
+            claims_json TEXT,             -- extracted claims, so a resumed run skips extraction
+            progress_json TEXT,           -- ids of claims already checked
+            updated_at TEXT NOT NULL
+        );
+        """,
+    ),
+    (
+        10,
+        "faq items",
+        """
+        CREATE TABLE faq_items (
+            paper_id TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            item_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (paper_id, item_id)
+        );
+        """,
+    ),
 ]

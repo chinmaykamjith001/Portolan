@@ -5,12 +5,15 @@ import { api } from "../api/client";
 import { usePaper, usePaperEvents } from "../api/hooks";
 import type { TitleCandidate } from "../api/types";
 import { DetailDrawer } from "../detail/DetailDrawer";
+import { FindingsPanel } from "../findings/FindingsPanel";
 import { useUI } from "../state/store";
 import { PaperStrip } from "./PaperStrip";
 import styles from "./shell.module.css";
 import { TopBar, type Theme } from "./TopBar";
 
 const ChartView = lazy(() => import("../chart/ChartView"));
+const RouteView = lazy(() => import("../route/RouteView"));
+const FaqView = lazy(() => import("../faq/FaqView"));
 
 const EXAMPLES = [
   { label: "Attention Is All You Need", input: "1706.03762" },
@@ -148,11 +151,17 @@ function Shell() {
             <ChartView />
           </Suspense>
         )}
-        {paperId && view !== "chart" && (
-          <p className={styles.placeholder}>
-            {view === "route" ? "The Route view" : "The FAQ"} arrives in a later milestone.
-          </p>
+        {paperId && view === "route" && (
+          <Suspense fallback={null}>
+            <RouteView />
+          </Suspense>
         )}
+        {paperId && view === "faq" && (
+          <Suspense fallback={null}>
+            <FaqView />
+          </Suspense>
+        )}
+        {paperId && <FindingsPanel />}
         {paperId && <DetailDrawer />}
       </main>
     </div>

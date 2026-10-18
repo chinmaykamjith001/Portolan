@@ -8,11 +8,15 @@ import type {
   ConceptPayload,
   CreatePaperResult,
   EdgeExplanation,
+  FAQItem,
+  FaqPayload,
+  FindingsPayload,
   Example,
   Explanation,
   GraphResult,
   LayerPayload,
   PaperInfo,
+  Route,
   Angle,
 } from "./types";
 
@@ -75,6 +79,16 @@ export const api = {
     request<Example>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/example?variant=${variant}`),
   graph: (paperId: string, conceptId: string) =>
     request<GraphResult>(`/papers/${enc(paperId)}/concepts/${enc(conceptId)}/graph`),
+  routeMain: (paperId: string) => request<Route>(`/papers/${enc(paperId)}/route/main`),
+  routeSub: (paperId: string, stopId: string) =>
+    request<Route>(`/papers/${enc(paperId)}/route/stops/${enc(stopId)}/sub`),
+  findings: (paperId: string) => request<FindingsPayload>(`/papers/${enc(paperId)}/findings`),
+  faq: (paperId: string) => request<FaqPayload>(`/papers/${enc(paperId)}/faq`),
+  ask: (paperId: string, question: string) =>
+    request<FAQItem>(`/papers/${enc(paperId)}/ask`, {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
   budget: () => request<Budget>("/budget"),
 };
 
@@ -92,5 +106,8 @@ export const keys = {
   code: (p: string, c: string) => ["code", p, c] as const,
   example: (p: string, c: string, variant: number) => ["example", p, c, variant] as const,
   graph: (p: string, c: string) => ["graph", p, c] as const,
+  route: (p: string, routeId: string) => ["route", p, routeId] as const,
+  findings: (p: string) => ["findings", p] as const,
+  faq: (p: string) => ["faq", p] as const,
   budget: () => ["budget"] as const,
 };

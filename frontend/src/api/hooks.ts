@@ -95,6 +95,34 @@ export function useGraph(paperId: string | null, conceptId: string | null, enabl
   });
 }
 
+export function useRoute(paperId: string | null, routeId: string) {
+  return useQuery({
+    queryKey: keys.route(paperId ?? "", routeId),
+    queryFn: async () =>
+      unwrap(await (routeId === "main" ? api.routeMain(paperId ?? "") : api.routeSub(paperId ?? "", routeId))),
+    enabled: paperId !== null,
+    staleTime: Infinity,
+    refetchInterval: (q) => pendingRefetch(q.state.data),
+  });
+}
+
+export function useFindings(paperId: string | null) {
+  return useQuery({
+    queryKey: keys.findings(paperId ?? ""),
+    queryFn: async () => unwrap(await api.findings(paperId ?? "")),
+    enabled: paperId !== null,
+  });
+}
+
+export function useFaq(paperId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: keys.faq(paperId ?? ""),
+    queryFn: async () => unwrap(await api.faq(paperId ?? "")),
+    enabled: enabled && paperId !== null,
+    refetchInterval: (q) => pendingRefetch(q.state.data),
+  });
+}
+
 export function useBudget() {
   return useQuery({
     queryKey: keys.budget(),
@@ -149,6 +177,18 @@ export function usePaperEvents(paperId: string | null): LiveState {
         void qc.invalidateQueries({ queryKey: keys.concept(paperId, String(data.concept_id)) });
       }
       void qc.invalidateQueries({ queryKey: keys.budget() });
+    });
+    source.addEventListener("route_ready", (e) => {
+      const data = parse(e as MessageEvent<string>);
+      void qc.invalidateQueries({ queryKey: keys.route(paperId, String(data.route_id)) });
+    });
+    source.addEventListener("finding_added", () => {
+      void qc.invalidateQueries({ queryKey: keys.findings(paperId) });
+      void qc.invalidateQueries({ queryKey: ["layer", paperId] });
+      void qc.invalidateQueries({ queryKey: ["concept", paperId] });
+    });
+    source.addEventListener("faq_ready", () => {
+      void qc.invalidateQueries({ queryKey: keys.faq(paperId) });
     });
     source.addEventListener("rate_limited", (e) => {
       const data = parse(e as MessageEvent<string>);

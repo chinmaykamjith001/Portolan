@@ -21,19 +21,24 @@ from portolan.detail.example import make_example
 from portolan.detail.explain import explain, explain_edge
 from portolan.detail.graph import make_graph
 from portolan.detail.ground import ground_code
+from portolan.faq.build import build_faq
 from portolan.ingest.http import PoliteClient
 from portolan.ingest.pipeline import ingest_ref, parse_upload
 from portolan.llm.gateway import Gateway
 from portolan.models.concept import MASTER
+from portolan.models.finding import FAQItem, Finding
 from portolan.models.paper import PaperDoc, PaperRef
 from portolan.orchestrator.events import EventBus
 from portolan.orchestrator.queue import Job, JobQueue
 from portolan.repo.finder import RepoFinder
+from portolan.route.build import build_main_route, build_sub_route
 from portolan.store.chart import ChartStore
 from portolan.store.db import Database
 from portolan.store.details import DetailStore
 from portolan.store.papers import load_paper, save_paper
 from portolan.store.repos import choose_repo, chosen_repo, save_candidates
+from portolan.store.routes import RouteStore
+from portolan.verify.engine import verify_paper
 
 # The paper whose job is running in this task, so gateway events (rate limits) reach its SSE stream.
 current_paper: ContextVar[str | None] = ContextVar("current_paper", default=None)
@@ -93,6 +98,10 @@ class Services:
             "ground": self._ground,
             "example": self._example,
             "graph": self._graph,
+            "route_main": self._route_main,
+            "route_sub": self._route_sub,
+            "verify": self._verify,
+            "faq": self._faq,
         }
         for kind, handler in handlers.items():
             self.queue.register(kind, _with_paper(handler))
@@ -132,6 +141,8 @@ class Services:
         self.progress(paper_id, "finding_code", 40, result.status.message)
         if chosen_repo(self.db, paper_id) is not None:
             self.queue.submit("index", f"index:{paper_id}", priority="P1", paper_id=paper_id)
+        else:  # no code to verify: go straight to the FAQ
+            self.queue.submit("faq", f"faq:{paper_id}", priority="P2", paper_id=paper_id)
 
     async def _index(self, job: Job) -> None:
         paper_id = str(job.paper_id)
@@ -143,6 +154,9 @@ class Services:
         self.progress(
             paper_id, "finding_code", 50, "Code ready" if ok else "Couldn't download the code"
         )
+        # Verification and the FAQ are background work (P2); the Chart never waits for them.
+        kind = "verify" if ok else "faq"
+        self.queue.submit(kind, f"{kind}:{paper_id}", priority="P2", paper_id=paper_id)
 
     async def _chart_master(self, job: Job) -> None:
         paper_id = str(job.paper_id)
@@ -155,6 +169,7 @@ class Services:
             paper_id, "layer_ready", {"layer_id": MASTER, "concepts": len(layer.concepts)}
         )
         self.progress(paper_id, "building_map", 70, "Map ready; preparing the next levels")
+        self.queue.submit("route_main", f"route_main:{paper_id}", priority="P1", paper_id=paper_id)
         self.queue.submit(
             "frontier", f"frontier:{paper_id}:{MASTER}", {"layer_id": MASTER},
             priority="P1", paper_id=paper_id,
@@ -249,6 +264,54 @@ class Services:
         spec = await make_graph(doc, self.gateway, self.chart, concept_id)
         self.details.save_graph(paper_id, concept_id, spec)
         self.bus.publish(paper_id, "detail_ready", {"concept_id": concept_id, "part": "graph"})
+
+    async def _route_main(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        doc = self.paper(paper_id)
+        if doc is None:
+            return
+        routes = RouteStore(self.db)
+        route = await build_main_route(doc, self.gateway, self.chart, routes)
+        routes.save(route)
+        self.bus.publish(paper_id, "route_ready", {"route_id": route.id})
+
+    async def _route_sub(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        doc = self.paper(paper_id)
+        if doc is None:
+            return
+        routes = RouteStore(self.db)
+        stop_id = str(job.payload["stop_id"])
+        route = await build_sub_route(doc, self.gateway, self.chart, routes, stop_id)
+        routes.save(route)
+        self.bus.publish(paper_id, "route_ready", {"route_id": route.id})
+
+    async def _verify(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        doc = self.paper(paper_id)
+        if doc is None:
+            return
+
+        def on_finding(f: Finding) -> None:
+            self.bus.publish(
+                paper_id, "finding_added", {"finding_id": f.id, "concept_ids": f.concept_ids}
+            )
+
+        await verify_paper(doc, self.gateway, self.chart, self.db, on_finding)
+        self.bus.publish(paper_id, "finding_added", {"finding_id": None, "concept_ids": []})
+        self.queue.submit("faq", f"faq:{paper_id}", priority="P2", paper_id=paper_id)
+
+    async def _faq(self, job: Job) -> None:
+        paper_id = str(job.paper_id)
+        doc = self.paper(paper_id)
+        if doc is None:
+            return
+
+        def on_item(_item: FAQItem) -> None:
+            self.bus.publish(paper_id, "faq_ready", {})
+
+        await build_faq(doc, self.gateway, self.chart, self.db, self.http, on_item)
+        self.bus.publish(paper_id, "faq_ready", {})
 
     def job_states(self, paper_id: str) -> dict[str, str]:
         states: dict[str, str] = {}

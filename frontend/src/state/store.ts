@@ -14,6 +14,12 @@ export interface EdgePopover {
   flowY?: number;
 }
 
+/** "Show on Chart" / "Find on Route": the view that should scroll to a concept on its next render. */
+export interface PendingFocus {
+  conceptId: string;
+  view: "chart" | "route";
+}
+
 export interface UIState {
   paperId: string | null;
   view: View;
@@ -24,7 +30,13 @@ export interface UIState {
   edge: EdgePopover | null;
   /** The concept we just came back out of (selected after Back, spec §13.4). */
   cameFrom: string | null;
+  findingsOpen: boolean;
+  pendingFocus: PendingFocus | null;
 
+  setFindingsOpen: (open: boolean) => void;
+  /** Switch to `view` and ask it to reveal `conceptId`; the view clears it when done. */
+  focusConcept: (conceptId: string, view: "chart" | "route") => void;
+  clearFocus: () => void;
   setPaper: (paperId: string | null) => void;
   setView: (view: View) => void;
   select: (conceptId: string | null, openDrawer?: boolean) => void;
@@ -49,9 +61,23 @@ export const useUI = create<UIState>((set, get) => ({
   drawerOpen: false,
   edge: null,
   cameFrom: null,
+  findingsOpen: false,
+  pendingFocus: null,
 
+  setFindingsOpen: (findingsOpen) => set({ findingsOpen }),
+  focusConcept: (conceptId, view) => set({ view, pendingFocus: { conceptId, view }, edge: null }),
+  clearFocus: () => set({ pendingFocus: null }),
   setPaper: (paperId) =>
-    set({ paperId, path: [], selectedId: null, drawerOpen: false, edge: null, cameFrom: null }),
+    set({
+      paperId,
+      path: [],
+      selectedId: null,
+      drawerOpen: false,
+      edge: null,
+      cameFrom: null,
+      findingsOpen: false,
+      pendingFocus: null,
+    }),
   setView: (view) => set({ view, edge: null }),
   select: (conceptId, openDrawer = true) =>
     set({ selectedId: conceptId, drawerOpen: conceptId !== null && openDrawer, edge: null }),

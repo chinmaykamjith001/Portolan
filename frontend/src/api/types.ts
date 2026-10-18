@@ -204,3 +204,76 @@ export interface GraphSpec {
 }
 
 export type GraphResult = GraphSpec | { template: "none" };
+
+export type StopRole = "first_mention" | "definition" | "setting" | "result" | "argument" | "other";
+
+export interface Stop {
+  id: string;
+  route_id: string;
+  order: number;
+  title: string;
+  section_label: string; // "§3.2.1" or "§3.2.1 ¶2"
+  anchor_id: string;
+  role: StopRole;
+  concept_id: string | null;
+  summary: string;
+  transition_to_next: string | null;
+  sub_route_id: string | null; // set when jumping in is possible
+  segment_title: string | null; // first stop of each top-level section
+  first_stop_id: string | null; // later mentions: where the concept first appeared
+  seen_again_at: string[]; // first mention: stop ids where it appears again
+  side_roads: string[]; // appendix anchor ids this stop refers to
+}
+
+export interface Route {
+  id: string; // "main" or a stop id
+  paper_id: string;
+  parent_stop_id: string | null;
+  stops: Stop[];
+}
+
+export type Verdict = "matches" | "mismatch" | "undocumented_in_paper" | "uncertain" | "not_found";
+export type Severity = "high" | "medium" | "low";
+
+export interface Finding {
+  id: string;
+  claim_text: string;
+  claim_type: string;
+  paper_anchor: string;
+  code_spans: CodeSpan[];
+  verdict: Verdict;
+  severity: Severity;
+  confidence: number;
+  method: "literal_match" | "static" | "llm_judge" | "executed_test";
+  evidence: string;
+  concept_ids: string[];
+}
+
+export interface FindingsPayload {
+  findings: Finding[];
+  state: "none" | "running" | "done" | "failed";
+}
+
+export type FaqSource =
+  | "reviewer_discussion"
+  | "github_issue"
+  | "paper_page_discussion"
+  | "finding"
+  | "anticipated"
+  | "user_asked";
+
+export interface FAQItem {
+  id: string;
+  question: string;
+  answer_markdown: string;
+  source_kind: FaqSource;
+  source_url: string | null;
+  source_label: string;
+  concept_ids: string[];
+  anchors_cited: string[];
+  supported: boolean;
+}
+
+export interface FaqPayload {
+  items: FAQItem[];
+}
