@@ -9,6 +9,9 @@ export interface EdgePopover {
   linkId: string;
   x: number; // screen coords of the edge midpoint
   y: number;
+  /** Canvas (flow) coords of the midpoint, so the popover follows pan/zoom. */
+  flowX?: number;
+  flowY?: number;
 }
 
 export interface UIState {
