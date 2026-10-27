@@ -412,3 +412,15 @@ grounding with 4 line notes on `toyformer/attention.py` 10–17; sandboxed examp
 example"; line graph; route of 10 stops in section order + a sub-route; 17 verification findings
 (most decided with no LLM); FAQ; Ask answered with a citation and code lines, and said "not
 supported" for an unanswerable question. The UI rendered all of it in Chromium.
+
+## Hosting on AWS (2026-10-27)
+
+- **One Lightsail server, not Lambda.** The job queue keeps working after a request returns, the
+  events endpoint is a long-lived SSE stream, data is SQLite on local disk, and indexing needs `git`.
+  Lambda freezes the process after each response and has no lasting disk. A 2 GB Lightsail instance
+  (about $12 a month) runs the existing image unchanged.
+- **Caddy in front with HTTPS and basic auth.** The app has no login, and an open URL would spend the
+  owner's free Gemini quota. Caddy gets a certificate on its own; without a domain the site uses
+  `<ip-with-dashes>.sslip.io`. The app container publishes no port, so every request passes Caddy.
+- **The setup script never handles the key.** It stops and asks the owner to paste it into `.env`
+  with `nano`; it stores only a bcrypt hash of the site password, in a git-ignored `Caddyfile`.

@@ -6,6 +6,9 @@
 # Local config (copy from portolan.toml.example)
 portolan.toml
 
+# Server login (written by deploy/lightsail/setup.sh; holds the password hash)
+deploy/lightsail/Caddyfile
+
 # Python
 __pycache__/
 *.py[cod]

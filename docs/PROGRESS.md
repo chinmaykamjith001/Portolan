@@ -328,3 +328,11 @@ worker; Windows sandbox (SYSTEMROOT, thread fallback, UTF-8, CRLF); the missing
 `POST /api/papers/{id}/repo` plus a Code dialog; SSE reconnect; stale state across papers; Ask
 retrieval; conflicting literal values; grounding not reaching the node shape. The owner's Windows
 test failures are fixed or made portable.
+
+## Hosting on AWS Lightsail (2026-10-27)
+
+- `deploy/lightsail/`: `compose.yml` (the app plus Caddy for HTTPS and a login), `setup.sh` (installs
+  Docker, adds swap, creates `.env`/`portolan.toml`/the login, builds, starts, runs `doctor`) and
+  `update.sh`. Walkthrough with console steps, costs and troubleshooting: `docs/deploy-lightsail.md`.
+- **Not verified yet:** neither the image nor the scripts have been run on a real server here (no
+  Docker or Linux available on the owner's Windows machine). The first Lightsail run is the test.

@@ -78,6 +78,9 @@ Open <http://localhost:8000>. The image serves the API and the built frontend fr
 keeps its data in the `portolan-data` volume. The Docker setup has not been built or run by the
 author yet (no Docker daemon was available); treat it as untested.
 
+To put it on a server with HTTPS and a login, see
+[docs/deploy-lightsail.md](docs/deploy-lightsail.md) (AWS Lightsail, about $12 a month).
+
 To run the same single process without Docker: `cd frontend && pnpm build`, then
 `cd backend && uv run portolan serve` and open <http://localhost:8000>.
 
