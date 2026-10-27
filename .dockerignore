@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 portolan.toml
+deploy/lightsail/Caddyfile
 **/node_modules
 **/.venv
 **/__pycache__
